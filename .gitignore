@@ -1,0 +1,46 @@
+# Build artifacts
+/build
+/x64
+_CPack_Packages
+
+# Automatically generated files by IDE
+/.vscode
+/.cache
+
+# Python cache
+__pycache__
+
+# macOS
+.DS_Store
+
+# Development project files
+*.sublime-project
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
