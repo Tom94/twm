@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <variant>
 
 #define NOMINMAX
 #include <Windows.h>
@@ -21,6 +22,26 @@
 using namespace std;
 
 // Convenience string processing functions
+string utf16_to_utf8(const wstring& utf16) {
+	string utf8;
+	if (!utf16.empty()) {
+		int size = WideCharToMultiByte(CP_UTF8, 0, &utf16[0], (int)utf16.size(), NULL, 0, NULL, NULL);
+		utf8.resize(size, 0);
+		WideCharToMultiByte(CP_UTF8, 0, &utf16[0], (int)utf16.size(), &utf8[0], size, NULL, NULL);
+	}
+	return utf8;
+}
+
+wstring utf8_to_utf16(const string& utf8) {
+	wstring utf16;
+	if (!utf8.empty()) {
+		int size = MultiByteToWideChar(CP_UTF8, 0, &utf8[0], (int)utf8.size(), NULL, 0);
+		utf16.resize(size, 0);
+		MultiByteToWideChar(CP_UTF8, 0, &utf8[0], (int)utf8.size(), &utf16[0], size);
+	}
+	return utf16;
+}
+
 string to_lower(string str) {
 	transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)tolower(c); });
 	return str;
@@ -122,9 +143,7 @@ class Hotkeys {
 	vector<Hotkey> m_hotkeys;
 
 public:
-	~Hotkeys() {
-		clear();
-	}
+	~Hotkeys() { clear(); }
 
 	void add(const string& keycombo, Callback cb) {
 		int id = (int)m_hotkeys.size();
@@ -199,16 +218,71 @@ public:
 
 		m_hotkeys.clear();
 	}
-} hotkeys;
+};
 
 // Window management
+struct Window {
+	string name;
+	HWND handle;
+
+public:
+	Window(HWND handle) : handle{handle} {
+		if (int name_length = GetWindowTextLengthW(handle); name_length > 0 && last_error_code() == 0) {
+			wstring wname;
+			wname.resize(name_length+1);
+			GetWindowTextW(handle, wname.data(), wname.size());
+			name = utf16_to_utf8(wname);
+		}
+	}
+
+	bool can_be_managed() {
+		return name.size() > 0 && !IsIconic(handle) && IsWindowVisible(handle);
+	}
+};
+
+struct BspNode {
+	struct Children {
+		unique_ptr<BspNode> left, right;
+	};
+
+	variant<HWND, Children> payload;
+};
+
+class Workspace {
+	unordered_map<HWND, Window> m_windows;
+	unique_ptr<BspNode> m_root;
+
+public:
+	void manage(Window window) {
+		m_windows.insert({window.handle, window});
+		std::cout << window.name << ": " << (uint64_t)window.handle << std::endl;
+	}
+} workspace;
+
+BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM param) {
+	auto window = Window{handle};
+
+	if (window.can_be_managed()) {
+		workspace.manage(window);
+	}
+
+	return TRUE;
+}
 
 int main() {
+    SetConsoleOutputCP(CP_UTF8);
+	SetLastError(0);
+
 	try {
+		Hotkeys hotkeys;
+		// vector<Workspace> workspaces;
+
 		hotkeys.add("alt+h", []() { std::cout << "left" << std::endl; });
 		hotkeys.add("alt+j", []() { std::cout << "down" << std::endl; });
 		hotkeys.add("alt+k", []() { std::cout << "up" << std::endl; });
 		hotkeys.add("alt+l", []() { std::cout << "right" << std::endl; });
+
+		EnumWindows(on_enum_window, 0);
 
 		while (true) {
 			hotkeys.check_for_triggers();
