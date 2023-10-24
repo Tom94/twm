@@ -57,7 +57,9 @@ string rtrim(string s) {
 	return s;
 }
 
-string trim(string s) { return ltrim(rtrim(s)); }
+string trim(string s) {
+	return ltrim(rtrim(s));
+}
 
 template <typename T> string join(const T& components, const string& delim) {
 	ostringstream s;
@@ -89,7 +91,9 @@ vector<string> split(string text, const string& delim) {
 }
 
 // Windows error handling
-int last_error_code() { return GetLastError(); }
+int last_error_code() {
+	return GetLastError();
+}
 
 string error_string(int code) {
 	char* s = NULL;
@@ -109,7 +113,9 @@ string error_string(int code) {
 	return result;
 }
 
-string last_error_string() { return trim(error_string(last_error_code())); }
+string last_error_string() {
+	return trim(error_string(last_error_code()));
+}
 
 // Hotkey management
 using Callback = function<void()>;
@@ -143,7 +149,9 @@ class Hotkeys {
 	vector<Hotkey> m_hotkeys;
 
 public:
-	~Hotkeys() { clear(); }
+	~Hotkeys() {
+		clear();
+	}
 
 	void add(const string& keycombo, Callback cb) {
 		int id = (int)m_hotkeys.size();
@@ -220,23 +228,43 @@ public:
 	}
 };
 
+string get_window_text(HWND handle) {
+	int name_length = GetWindowTextLengthW(handle);
+	if (name_length <= 0 || last_error_code() != 0) {
+		return "";
+	}
+
+	wstring wname;
+	wname.resize(name_length + 1);
+	GetWindowTextW(handle, wname.data(), wname.size());
+	return utf16_to_utf8(wname);
+}
+
 // Window management
-struct Window {
-	string name;
-	HWND handle;
+class Window {
+	string m_name;
+	HWND m_handle;
 
 public:
-	Window(HWND handle) : handle{handle} {
-		if (int name_length = GetWindowTextLengthW(handle); name_length > 0 && last_error_code() == 0) {
-			wstring wname;
-			wname.resize(name_length+1);
-			GetWindowTextW(handle, wname.data(), wname.size());
-			name = utf16_to_utf8(wname);
-		}
+	Window(HWND handle) : m_name{get_window_text(handle)}, m_handle{handle} {}
+
+	// Returns true if the name changed
+	bool update_name() {
+		string old_name = m_name;
+		m_name = get_window_text(m_handle);
+		return m_name != old_name;
 	}
 
 	bool can_be_managed() {
-		return name.size() > 0 && !IsIconic(handle) && IsWindowVisible(handle);
+		return m_name.size() > 0 && !IsIconic(m_handle) && IsWindowVisible(m_handle);
+	}
+
+	const string& name() const {
+		return m_name;
+	}
+
+	HWND handle() const {
+		return m_handle;
 	}
 };
 
@@ -254,8 +282,8 @@ class Workspace {
 
 public:
 	void manage(Window window) {
-		m_windows.insert({window.handle, window});
-		std::cout << window.name << ": " << (uint64_t)window.handle << std::endl;
+		m_windows.insert({window.handle(), window});
+		std::cout << window.name() << ": " << (uint64_t)window.handle() << std::endl;
 	}
 } workspace;
 
@@ -269,8 +297,15 @@ BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM param) {
 	return TRUE;
 }
 
+BOOL CALLBACK on_enum_desktop(_In_ LPWSTR desktop_name, _In_ LPARAM param) {
+	string name = utf16_to_utf8(desktop_name);
+	std::cout << "Desktop: " << name << std::endl;
+	return TRUE;
+}
+
+
 int main() {
-    SetConsoleOutputCP(CP_UTF8);
+	SetConsoleOutputCP(CP_UTF8);
 	SetLastError(0);
 
 	try {
@@ -283,10 +318,13 @@ int main() {
 		hotkeys.add("alt+l", []() { std::cout << "right" << std::endl; });
 
 		EnumWindows(on_enum_window, 0);
+		EnumDesktopsW(nullptr, on_enum_desktop, 0);
 
 		while (true) {
 			hotkeys.check_for_triggers();
 			this_thread::sleep_for(1ms);
 		}
-	} catch (const runtime_error& e) { std::cerr << "Uncaught exception: " << e.what() << std::endl; }
+	} catch (const runtime_error& e) {
+		std::cerr << "Uncaught exception: " << e.what() << std::endl;
+	}
 }
