@@ -265,7 +265,7 @@ string get_window_text(HWND handle) {
 
 	wstring wname;
 	wname.resize(name_length + 1);
-	GetWindowTextW(handle, wname.data(), wname.size());
+	GetWindowTextW(handle, wname.data(), (int)wname.size());
 	return utf16_to_utf8(wname);
 }
 
@@ -356,7 +356,7 @@ public:
 	}
 } workspace;
 
-BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM param) {
+BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM) {
 	auto window = Window{handle};
 
 	if (window.can_be_managed()) {
@@ -366,7 +366,7 @@ BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM param) {
 	return TRUE;
 }
 
-BOOL CALLBACK on_enum_desktop(_In_ LPWSTR desktop_name, _In_ LPARAM param) {
+BOOL CALLBACK on_enum_desktop(_In_ LPWSTR desktop_name, _In_ LPARAM) {
 	string name = utf16_to_utf8(desktop_name);
 	std::cout << "Desktop: " << name << std::endl;
 	return TRUE;
