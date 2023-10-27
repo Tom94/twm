@@ -12,6 +12,7 @@
 #include <variant>
 
 #define NOMINMAX
+#include <ShlObj.h>
 #include <Windows.h>
 #ifdef far
 #	undef far
@@ -89,6 +90,34 @@ vector<string> split(string text, const string& delim) {
 
 	return result;
 }
+
+class ScopeGuard {
+public:
+	ScopeGuard() = default;
+	ScopeGuard(const std::function<void()>& callback) : m_callback{callback} {}
+	ScopeGuard(std::function<void()>&& callback) : m_callback{std::move(callback)} {}
+	ScopeGuard& operator=(const ScopeGuard& other) = delete;
+	ScopeGuard(const ScopeGuard& other) = delete;
+	ScopeGuard& operator=(ScopeGuard&& other) {
+		std::swap(m_callback, other.m_callback);
+		return *this;
+	}
+	ScopeGuard(ScopeGuard&& other) {
+		*this = std::move(other);
+	}
+	~ScopeGuard() {
+		if (m_callback) {
+			m_callback();
+		}
+	}
+
+	void disarm() {
+		m_callback = {};
+	}
+
+private:
+	std::function<void()> m_callback;
+};
 
 // Windows error handling
 int last_error_code() {
@@ -240,6 +269,40 @@ string get_window_text(HWND handle) {
 	return utf16_to_utf8(wname);
 }
 
+auto query_virtual_desktop_manager() {
+	const CLSID CLSID_ImmersiveShell = {
+		0xC2F03A33, 0x21F5, 0x47FA, {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}
+    };
+
+	IServiceProvider* service_provider = NULL;
+
+	CoInitialize(NULL);
+	HRESULT hr = CoCreateInstance(
+		CLSID_ImmersiveShell, NULL, CLSCTX_LOCAL_SERVER, __uuidof(IServiceProvider), (PVOID*)&service_provider
+	);
+
+	if (FAILED(hr)) {
+		throw runtime_error{string{"Failed to get immersive shell service provider: "} + to_string(hr)};
+	}
+
+	auto guard = ScopeGuard([&]() { service_provider->Release(); });
+
+	IVirtualDesktopManager* virtual_desktop_manager;
+	hr = service_provider->QueryService(__uuidof(IVirtualDesktopManager), &virtual_desktop_manager);
+
+	if (FAILED(hr)) {
+		throw runtime_error{"Failed to get virtual desktop manager."};
+	}
+
+	SetLastError(0);
+	return virtual_desktop_manager;
+}
+
+IVirtualDesktopManager* virtual_desktop() {
+	static auto virtual_desktop = query_virtual_desktop_manager();
+	return virtual_desktop;
+}
+
 // Window management
 class Window {
 	string m_name;
@@ -256,7 +319,9 @@ public:
 	}
 
 	bool can_be_managed() {
-		return m_name.size() > 0 && !IsIconic(m_handle) && IsWindowVisible(m_handle);
+		BOOL on_current_desktop = 0;
+		virtual_desktop()->IsWindowOnCurrentVirtualDesktop(m_handle, &on_current_desktop);
+		return m_name.size() > 0 && !IsIconic(m_handle) && IsWindowVisible(m_handle) && on_current_desktop;
 	}
 
 	const string& name() const {
@@ -281,6 +346,10 @@ class Workspace {
 	unique_ptr<BspNode> m_root;
 
 public:
+	Workspace() {}
+
+	~Workspace() {}
+
 	void manage(Window window) {
 		m_windows.insert({window.handle(), window});
 		std::cout << window.name() << ": " << (uint64_t)window.handle() << std::endl;
@@ -303,8 +372,8 @@ BOOL CALLBACK on_enum_desktop(_In_ LPWSTR desktop_name, _In_ LPARAM param) {
 	return TRUE;
 }
 
-
 int main() {
+	CoInitialize(nullptr);
 	SetConsoleOutputCP(CP_UTF8);
 	SetLastError(0);
 
@@ -318,7 +387,6 @@ int main() {
 		hotkeys.add("alt+l", []() { std::cout << "right" << std::endl; });
 
 		EnumWindows(on_enum_window, 0);
-		EnumDesktopsW(nullptr, on_enum_desktop, 0);
 
 		while (true) {
 			hotkeys.check_for_triggers();
