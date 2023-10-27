@@ -418,29 +418,38 @@ struct BspNode {
 	variant<HWND, Children> payload;
 };
 
-class Workspace {
+class Desktop {
 	unordered_map<HWND, Window> m_windows;
 	unique_ptr<BspNode> m_root;
 
 public:
-	Workspace() {}
+	Desktop() {}
+	~Desktop() {}
 
-	~Workspace() {}
+	Desktop(const Desktop& other) = delete;
+	Desktop(Desktop&& other) = default;
 
 	void manage(Window window) {
 		m_windows.insert({window.handle(), window});
 		std::cout << window.name() << ": " << window.rect() << std::endl;
 	}
-} workspace;
+};
 
-BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM) {
+BOOL CALLBACK on_enum_window(__in HWND handle, __in LPARAM param) {
 	auto window = Window{handle};
 
 	if (window.can_be_managed()) {
-		workspace.manage(window);
+		auto workspace = (Desktop*)param;
+		workspace->manage(window);
 	}
 
 	return TRUE;
+}
+
+Desktop current_desktop() {
+	Desktop result;
+	EnumWindows(on_enum_window, (LPARAM)&result);
+	return result;
 }
 
 BOOL CALLBACK on_enum_desktop(_In_ LPWSTR desktop_name, _In_ LPARAM) {
@@ -462,8 +471,6 @@ int main() {
 		hotkeys.add("alt+j", []() { std::cout << "down" << std::endl; });
 		hotkeys.add("alt+k", []() { std::cout << "up" << std::endl; });
 		hotkeys.add("alt+l", []() { std::cout << "right" << std::endl; });
-
-		EnumWindows(on_enum_window, 0);
 
 		while (true) {
 			hotkeys.check_for_triggers();
