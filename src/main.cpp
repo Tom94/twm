@@ -22,6 +22,78 @@
 // Saves so much typing
 using namespace std;
 
+// Helper math
+struct Vec2 {
+	Vec2(float c = 0.0f) : Vec2(c, c) {}
+	Vec2(float x, float y) : x{x}, y{y} {}
+
+	static Vec2 zero() { return Vec2{0.0f}; }
+	static Vec2 ones() { return Vec2{1.0f}; }
+
+	Vec2& operator/=(float other) { return *this = *this / other; }
+	Vec2& operator*=(float other) { return *this = *this * other; }
+	Vec2& operator-=(float other) { return *this = *this - other; }
+	Vec2& operator+=(float other) { return *this = *this + other; }
+
+	Vec2 operator/(float other) const { return {x / other, y / other}; }
+	Vec2 operator*(float other) const { return {x * other, y * other}; }
+	Vec2 operator-(float other) const { return {x - other, y - other}; }
+	Vec2 operator+(float other) const { return {x + other, y + other}; }
+
+	Vec2& operator/=(const Vec2& other) { return *this = *this / other; }
+	Vec2& operator*=(const Vec2& other) { return *this = *this * other; }
+	Vec2& operator-=(const Vec2& other) { return *this = *this - other; }
+	Vec2& operator+=(const Vec2& other) { return *this = *this + other; }
+
+	Vec2 operator/(const Vec2& other) const { return {x / other.x, y / other.y}; }
+	Vec2 operator*(const Vec2& other) const { return {x * other.x, y * other.y}; }
+	Vec2 operator-(const Vec2& other) const { return {x - other.x, y - other.y}; }
+	Vec2 operator+(const Vec2& other) const { return {x + other.x, y + other.y}; }
+
+	bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
+	bool operator!=(const Vec2& other) const { return x != other.x || y != other.y; }
+
+	float length_sq() const { return x * x + y * y; }
+	float length() const { return sqrt(length_sq()); }
+	float prod() const { return x * y; }
+	float sum() const { return x + y; }
+	float max() const { return std::max(x, y); }
+	float min() const { return std::min(x, y); }
+	int max_axis() const { return x > y ? 0 : 1; }
+	int min_axis() const { return x > y ? 1 : 0; }
+
+	float x, y;
+};
+
+struct Rect {
+	Vec2 top_left;
+	Vec2 bottom_right;
+
+	Rect(const RECT& r) :
+		top_left{static_cast<float>(r.left), static_cast<float>(r.top)},
+		bottom_right{static_cast<float>(r.right), static_cast<float>(r.bottom)} {}
+
+	bool operator==(const Rect& other) const {
+		return top_left == other.top_left && bottom_right == other.bottom_right;
+	}
+
+	bool operator!=(const Rect& other) const {
+		return top_left != other.top_left || bottom_right != other.bottom_right;
+	}
+
+	Vec2 center() const { return (top_left + bottom_right) / 2.0f; }
+	Vec2 size() const { return bottom_right - top_left; }
+	Vec2 area() const { return size().prod(); }
+};
+
+std::ostream& operator<<(std::ostream& os, const Vec2& v) {
+	return os << "[" << v.x << ", " << v.y << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const Rect& r) {
+	return os << "[top_left=" << r.top_left << ", bottom_right=" << r.bottom_right << "]";
+}
+
 // Convenience string processing functions
 string utf16_to_utf8(const wstring& utf16) {
 	string utf8;
@@ -102,18 +174,15 @@ public:
 		std::swap(m_callback, other.m_callback);
 		return *this;
 	}
-	ScopeGuard(ScopeGuard&& other) {
-		*this = std::move(other);
-	}
+
+	ScopeGuard(ScopeGuard&& other) { *this = std::move(other); }
 	~ScopeGuard() {
 		if (m_callback) {
 			m_callback();
 		}
 	}
 
-	void disarm() {
-		m_callback = {};
-	}
+	void disarm() { m_callback = {}; }
 
 private:
 	std::function<void()> m_callback;
@@ -178,9 +247,7 @@ class Hotkeys {
 	vector<Hotkey> m_hotkeys;
 
 public:
-	~Hotkeys() {
-		clear();
-	}
+	~Hotkeys() { clear(); }
 
 	void add(const string& keycombo, Callback cb) {
 		int id = (int)m_hotkeys.size();
@@ -257,9 +324,19 @@ public:
 	}
 };
 
+Rect get_window_rect(HWND handle) {
+	RECT r;
+	if (GetWindowRect(handle, &r) == 0) {
+		throw runtime_error{string{"Could not obtain rect: "} + last_error_string()};
+	}
+
+	return {r};
+}
+
 string get_window_text(HWND handle) {
 	int name_length = GetWindowTextLengthW(handle);
 	if (name_length <= 0 || last_error_code() != 0) {
+		SetLastError(0);
 		return "";
 	}
 
@@ -306,16 +383,19 @@ IVirtualDesktopManager* virtual_desktop() {
 // Window management
 class Window {
 	string m_name;
+	Rect m_rect;
 	HWND m_handle;
 
 public:
-	Window(HWND handle) : m_name{get_window_text(handle)}, m_handle{handle} {}
+	Window(HWND handle) : m_name{get_window_text(handle)}, m_rect{get_window_rect(handle)}, m_handle{handle} {}
 
 	// Returns true if the name changed
-	bool update_name() {
+	bool update() {
 		string old_name = m_name;
+		Rect old_rect = m_rect;
 		m_name = get_window_text(m_handle);
-		return m_name != old_name;
+		m_rect = get_window_rect(m_handle);
+		return m_name != old_name || m_rect != old_rect;
 	}
 
 	bool can_be_managed() {
@@ -324,13 +404,10 @@ public:
 		return m_name.size() > 0 && !IsIconic(m_handle) && IsWindowVisible(m_handle) && on_current_desktop;
 	}
 
-	const string& name() const {
-		return m_name;
-	}
+	const string& name() const { return m_name; }
+	const Rect& rect() const { return m_rect; }
 
-	HWND handle() const {
-		return m_handle;
-	}
+	HWND handle() const { return m_handle; }
 };
 
 struct BspNode {
@@ -352,7 +429,7 @@ public:
 
 	void manage(Window window) {
 		m_windows.insert({window.handle(), window});
-		std::cout << window.name() << ": " << (uint64_t)window.handle() << std::endl;
+		std::cout << window.name() << ": " << window.rect() << std::endl;
 	}
 } workspace;
 
