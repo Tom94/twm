@@ -22,6 +22,16 @@
 // Saves so much typing
 using namespace std;
 
+#define STRINGIFY(x) #x
+#define STR(x) STRINGIFY(x)
+#define FILE_LINE __FILE__ ":" STR(__LINE__)
+#define TWM_ASSERT(x)                                                     \
+	do {                                                                  \
+		if (!(x)) {                                                       \
+			throw std::runtime_error{string{FILE_LINE " " #x " failed"}}; \
+		}                                                                 \
+	} while (0);
+
 // Helper math
 struct Vec2 {
 	Vec2(float c = 0.0f) : Vec2(c, c) {}
