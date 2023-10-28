@@ -5,6 +5,7 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -399,6 +400,17 @@ class Window {
 public:
 	Window(HWND handle) : m_name{get_window_text(handle)}, m_rect{get_window_rect(handle)}, m_handle{handle} {}
 
+	static optional<Window> focused() {
+		auto handle = GetForegroundWindow();
+		if (!handle) {
+			return {};
+		}
+
+		return Window{handle};
+	}
+
+	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
+
 	// Returns true if the name changed
 	bool update() {
 		string old_name = m_name;
@@ -442,6 +454,16 @@ public:
 	void manage(Window window) {
 		m_windows.insert({window.handle(), window});
 		std::cout << window.name() << ": " << window.rect() << std::endl;
+	}
+
+	std::optional<Window> adjacent_window(const std::optional<Window>& w, const Vec2& dir) const {
+		if (!w.has_value() || m_windows.count(w->handle()) == 0) {
+			return {};
+		}
+
+		TWM_ASSERT(w->handle() == m_windows.at(w->handle()).handle());
+
+		return {};
 	}
 };
 
