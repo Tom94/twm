@@ -428,6 +428,7 @@ public:
 	friend class Desktop;
 
 	static const Window* focused();
+	static void focus_adjacent(Direction dir);
 	static const Window* get(HWND handle);
 
 	const Window* get_adjacent(Direction dir) const;
@@ -510,16 +511,17 @@ public:
 		}
 
 		size_t axis = dir == Direction::Left || dir == Direction::Right ? 0 : 1;
-		float sign = dir == Direction::Up || dir == Direction::Left ? 1 : -1;
+
 		const Window* best_candidate = nullptr;
 		float best_distance = numeric_limits<float>::infinity();
 
-		Vec2 center = w->rect().center();
+		float center = w->rect().center()[axis];
 
 		for (auto& [_, ow] : m_windows) {
 			float dist = w->rect().distance_with_axis_preference(axis, ow.rect());
+			bool is_on_correct_side = (center - ow.rect().center()[axis] > 0) ==
+				(dir == Direction::Up || dir == Direction::Left);
 
-			bool is_on_correct_side = sign * (center[axis] - ow.rect().center()[axis]) > 0;
 			if (w != &ow && is_on_correct_side && dist < best_distance) {
 				best_distance = dist;
 				best_candidate = &ow;
@@ -609,6 +611,14 @@ Desktop* Desktop::get(GUID id) {
 }
 
 const Window* Window::focused() { return Window::get(GetForegroundWindow()); }
+
+void Window::focus_adjacent(Direction dir) {
+	if (auto* focused = Window::focused()) {
+		if (auto* adj = focused->get_adjacent(dir)) {
+			adj->focus();
+		}
+	}
+}
 
 const Window* Window::get(HWND handle) {
 	auto* desktop = Desktop::get(handle);
@@ -719,10 +729,10 @@ int main() {
 	try {
 		Hotkeys hotkeys;
 
-		hotkeys.add("alt+h", []() { Window::focused()->get_adjacent(Direction::Left)->focus(); });
-		hotkeys.add("alt+j", []() { Window::focused()->get_adjacent(Direction::Down)->focus(); });
-		hotkeys.add("alt+k", []() { Window::focused()->get_adjacent(Direction::Up)->focus(); });
-		hotkeys.add("alt+l", []() { Window::focused()->get_adjacent(Direction::Right)->focus(); });
+		hotkeys.add("alt+h", []() { Window::focus_adjacent(Direction::Left); });
+		hotkeys.add("alt+j", []() { Window::focus_adjacent(Direction::Down); });
+		hotkeys.add("alt+k", []() { Window::focus_adjacent(Direction::Up); });
+		hotkeys.add("alt+l", []() { Window::focus_adjacent(Direction::Right); });
 
 		while (true) {
 			hotkeys.check_for_triggers();
