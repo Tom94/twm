@@ -308,87 +308,6 @@ unordered_map<string, UINT> string_to_keycode = {
 	{"space",     VK_SPACE },
 };
 
-class Hotkeys {
-	vector<Hotkey> m_hotkeys;
-
-public:
-	~Hotkeys() { clear(); }
-
-	void add(const string& keycombo, Callback cb) {
-		int id = (int)m_hotkeys.size();
-		auto parts = split(keycombo, "+");
-		UINT mod = 0;
-		UINT keycode = 0;
-
-		// keycombo is of the form mod1+mod2+...+keycode
-		// case insensitive and with optional spaces. Parse below.
-		for (const auto& part : parts) {
-			auto name = to_lower(trim(part));
-
-			if (string_to_modifier.count(name) > 0) {
-				mod |= string_to_modifier[name];
-				continue;
-			}
-
-			// If none of the above modifiers is given, that means we are given a keycode.
-			// Only one keycode per keybinding is allowed -- check for this.
-			if (keycode != 0) {
-				throw runtime_error{string{"Error registering "} + keycombo + ": more than one keycode"};
-			}
-
-			if (string_to_keycode.count(name) > 0) {
-				keycode = string_to_keycode[name];
-				continue;
-			}
-
-			if (name.size() != 1) {
-				throw runtime_error{string{"Error registering "} + keycombo + ": unknown keycode"};
-			}
-
-			keycode = (char)toupper(name[0]);
-		}
-
-		if (RegisterHotKey(nullptr, id, mod, keycode) == 0) {
-			throw runtime_error{string{"Error registering "} + keycombo + ": " + last_error_string()};
-		}
-
-		m_hotkeys.emplace_back(id, cb);
-	}
-
-	void trigger(int id) const {
-		if (id < 0 || id >= (int)m_hotkeys.size()) {
-			throw runtime_error{"Invalid hotkey id"};
-		}
-
-		m_hotkeys[id].cb();
-	}
-
-	void check_for_triggers() const {
-		MSG msg = {};
-		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
-			switch (msg.message) {
-				case WM_HOTKEY: {
-					trigger((int)msg.wParam);
-				} break;
-				default: {
-					log_warning(format("Unknown message: {}", msg.message));
-				} break;
-			}
-		}
-	}
-
-	void clear() {
-		for (size_t i = 0; i < m_hotkeys.size(); ++i) {
-			// We do not care about errors in the unregistering process here.
-			// Simply try to unbind all hotkeys and hope for the best -- there
-			// is nothing we can do if unbinding fails.
-			UnregisterHotKey(nullptr, (int)i);
-		}
-
-		m_hotkeys.clear();
-	}
-};
-
 Rect get_window_rect(HWND handle) {
 	RECT r;
 	if (GetWindowRect(handle, &r) == 0) {
@@ -587,10 +506,6 @@ void update_desktops() {
 }
 
 Desktop* current_desktop() {
-	// Make sure that our current view of the desktops is as recent as possible before attempting to deduce the
-	// current desktop from an enumeration of windows.
-	update_desktops();
-
 	Desktop* result;
 	EnumWindows(
 		[](__in HWND handle, __in LPARAM param) {
@@ -616,6 +531,91 @@ Desktop* current_desktop() {
 	return result;
 }
 
+class Hotkeys {
+	vector<Hotkey> m_hotkeys;
+
+public:
+	~Hotkeys() { clear(); }
+
+	void add(const string& keycombo, Callback cb) {
+		int id = (int)m_hotkeys.size();
+		auto parts = split(keycombo, "+");
+		UINT mod = 0;
+		UINT keycode = 0;
+
+		// keycombo is of the form mod1+mod2+...+keycode
+		// case insensitive and with optional spaces. Parse below.
+		for (const auto& part : parts) {
+			auto name = to_lower(trim(part));
+
+			if (string_to_modifier.count(name) > 0) {
+				mod |= string_to_modifier[name];
+				continue;
+			}
+
+			// If none of the above modifiers is given, that means we are given a keycode.
+			// Only one keycode per keybinding is allowed -- check for this.
+			if (keycode != 0) {
+				throw runtime_error{string{"Error registering "} + keycombo + ": more than one keycode"};
+			}
+
+			if (string_to_keycode.count(name) > 0) {
+				keycode = string_to_keycode[name];
+				continue;
+			}
+
+			if (name.size() != 1) {
+				throw runtime_error{string{"Error registering "} + keycombo + ": unknown keycode"};
+			}
+
+			keycode = (char)toupper(name[0]);
+		}
+
+		if (RegisterHotKey(nullptr, id, mod, keycode) == 0) {
+			throw runtime_error{string{"Error registering "} + keycombo + ": " + last_error_string()};
+		}
+
+		m_hotkeys.emplace_back(id, cb);
+	}
+
+	void trigger(int id) const {
+		if (id < 0 || id >= (int)m_hotkeys.size()) {
+			throw runtime_error{"Invalid hotkey id"};
+		}
+
+		// Ensure our information about desktops and their contained windows is as up-to-date as
+		// possible before triggering a hotkey to minimize potential for erroneous behavior.
+		update_desktops();
+		current_desktop()->print();
+		m_hotkeys[id].cb();
+	}
+
+	void check_for_triggers() const {
+		MSG msg = {};
+		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
+			switch (msg.message) {
+				case WM_HOTKEY: {
+					trigger((int)msg.wParam);
+				} break;
+				default: {
+					log_warning(format("Unknown message: {}", msg.message));
+				} break;
+			}
+		}
+	}
+
+	void clear() {
+		for (size_t i = 0; i < m_hotkeys.size(); ++i) {
+			// We do not care about errors in the unregistering process here.
+			// Simply try to unbind all hotkeys and hope for the best -- there
+			// is nothing we can do if unbinding fails.
+			UnregisterHotKey(nullptr, (int)i);
+		}
+
+		m_hotkeys.clear();
+	}
+};
+
 int main() {
 	// Required for IVirtualDesktopManager
 	CoInitialize(nullptr);
@@ -630,14 +630,11 @@ int main() {
 
 	try {
 		Hotkeys hotkeys;
-		// vector<Workspace> workspaces;
 
 		hotkeys.add("alt+h", []() { log_info("left"); });
 		hotkeys.add("alt+j", []() { log_info("down"); });
 		hotkeys.add("alt+k", []() { log_info("up"); });
 		hotkeys.add("alt+l", []() { log_info("right"); });
-
-		update_desktops();
 
 		while (true) {
 			hotkeys.check_for_triggers();
