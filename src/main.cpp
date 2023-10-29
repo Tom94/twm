@@ -474,8 +474,10 @@ public:
 };
 
 unordered_map<GUID, Desktop> desktops;
+optional<GUID> current_desktop_id = {};
 
 void update_desktops() {
+	current_desktop_id = {};
 	for (auto& [_, d] : desktops) {
 		d.mark_windows_for_deletion();
 	}
@@ -490,6 +492,17 @@ void update_desktops() {
 				auto insert_result = desktops.insert({desktop_id.value(), Desktop{}});
 				auto* desktop = &insert_result.first->second;
 				desktop->manage(window);
+
+				// If we haven't yet figured out which desktop is the current one, check
+				// whether the window we are currently looking at is on the current desktop.
+				// If so, use that window's desktop.
+				if (!current_desktop_id.has_value()) {
+					BOOL is_current_desktop = 0;
+					HRESULT r = desktop_manager()->IsWindowOnCurrentVirtualDesktop(window.handle(), &is_current_desktop);
+					if (r == S_OK && is_current_desktop != 0) {
+						current_desktop_id = desktop_id;
+					}
+				}
 			}
 
 			// Returning TRUE means we want to keep enumerating more windows.
@@ -506,29 +519,7 @@ void update_desktops() {
 }
 
 Desktop* current_desktop() {
-	Desktop* result;
-	EnumWindows(
-		[](__in HWND handle, __in LPARAM param) {
-			auto window = Window{handle};
-
-			if (optional<GUID> desktop_id = window.desktop_id(); desktop_id.has_value() && window.can_be_managed()) {
-				BOOL is_current_desktop = 0;
-				HRESULT r = desktop_manager()->IsWindowOnCurrentVirtualDesktop(window.handle(), &is_current_desktop);
-				if (r == S_OK && is_current_desktop != 0) {
-					auto it = desktops.find(desktop_id.value());
-					if (it != desktops.end()) {
-						*(Desktop**)param = &it->second;
-						return FALSE;
-					}
-				}
-			}
-
-			// Returning TRUE means we want to keep enumerating more windows.
-			return TRUE;
-		},
-		(LPARAM)&result
-	);
-	return result;
+	return current_desktop_id.has_value() ? &desktops.at(current_desktop_id.value()) : nullptr;
 }
 
 class Hotkeys {
