@@ -473,6 +473,10 @@ public:
 	}
 };
 
+// To simplify our API, we would like to be able to occasionally return a generic empty desktop
+// in case no actual desktop can be obtained. This leads to cleaner user code that then does not
+// need to deal with e.g. null-Desktop* or optional<Desktop>.
+Desktop empty_desktop = {};
 unordered_map<GUID, Desktop> desktops;
 optional<GUID> current_desktop_id = {};
 
@@ -518,8 +522,8 @@ void update_desktops() {
 	erase_if(desktops, [](const auto& item) { return item.second.empty(); });
 }
 
-Desktop* current_desktop() {
-	return current_desktop_id.has_value() ? &desktops.at(current_desktop_id.value()) : nullptr;
+Desktop& current_desktop() {
+	return current_desktop_id.has_value() ? desktops.at(current_desktop_id.value()) : empty_desktop;
 }
 
 class Hotkeys {
@@ -577,7 +581,7 @@ public:
 		// Ensure our information about desktops and their contained windows is as up-to-date as
 		// possible before triggering a hotkey to minimize potential for erroneous behavior.
 		update_desktops();
-		current_desktop()->print();
+		current_desktop().print();
 		m_hotkeys[id].cb();
 	}
 
