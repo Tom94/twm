@@ -383,28 +383,33 @@ IVirtualDesktopManager* desktop_manager() {
 	return desktop;
 }
 
+optional<GUID> get_window_desktop_id(HWND handle) {
+	GUID desktop_id;
+	HRESULT result = desktop_manager()->GetWindowDesktopId(handle, &desktop_id);
+	if (result != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
+		return {};
+	}
+
+	return desktop_id;
+}
+
+enum class Direction {
+	Up,
+	Down,
+	Left,
+	Right,
+};
+
 // Window management
 class Window {
 	string m_name = "";
 	Rect m_rect = {};
 	HWND m_handle = NULL;
+	GUID m_desktop_id = {};
 	bool m_marked_for_deletion = false;
 
-	Window(HWND handle) : m_name{get_window_text(handle)}, m_rect{get_window_rect(handle)}, m_handle{handle} {}
-
-public:
-	friend class Desktop;
-
-	static optional<Window> focused() {
-		auto handle = GetForegroundWindow();
-		if (!handle) {
-			return {};
-		}
-
-		return Window{handle};
-	}
-
-	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
+	Window(HWND handle, const GUID& desktop_id) :
+		m_name{get_window_text(handle)}, m_rect{get_window_rect(handle)}, m_handle{handle}, m_desktop_id{desktop_id} {}
 
 	// Returns true if the name changed
 	bool update(const Window& other) {
@@ -416,13 +421,23 @@ public:
 		return m_name != old_name || m_rect != old_rect;
 	}
 
+	void mark_for_deletion() { m_marked_for_deletion = true; }
+	bool marked_for_deletion() const { return m_marked_for_deletion; }
+
+public:
+	friend class Desktop;
+
+	static const Window* focused();
+	static const Window* get(HWND handle);
+
+	const Window* get_adjacent(Direction dir) const;
+
+	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
+
 	const string& name() const { return m_name; }
 	const Rect& rect() const { return m_rect; }
 
 	HWND handle() const { return m_handle; }
-
-	void mark_for_deletion() { m_marked_for_deletion = true; }
-	bool marked_for_deletion() const { return m_marked_for_deletion; }
 };
 
 struct BspNode {
@@ -433,30 +448,17 @@ struct BspNode {
 	variant<HWND, Children> payload;
 };
 
-enum class Direction {
-	Up,
-	Down,
-	Left,
-	Right,
-};
-
 class Desktop {
 	unordered_map<HWND, Window> m_windows;
 	unique_ptr<BspNode> m_root;
-
-public:
-	Desktop() {}
-	~Desktop() {}
-
-	Desktop(const Desktop& other) = delete;
-	Desktop(Desktop&& other) = default;
+	GUID m_id;
 
 	bool can_be_managed(const Window& w) {
 		return !w.name().empty() && !IsIconic(w.handle()) && IsWindowVisible(w.handle());
 	}
 
 	bool try_manage(HWND handle) {
-		auto w = Window{handle};
+		auto w = Window{handle, m_id};
 
 		if (!can_be_managed(w)) {
 			return false;
@@ -470,16 +472,6 @@ public:
 		return true;
 	}
 
-	// optional<Window> adjacent_window(const optional<Window>& w, Direction dir) const {
-	//	if (!w.has_value() || m_windows.count(w->handle()) == 0) {
-	//		return {};
-	//	}
-
-	//	TWM_ASSERT(w->handle() == m_windows.at(w->handle()).handle());
-
-	//	return {};
-	// }
-
 	void mark_windows_for_deletion() {
 		for (auto& [_, w] : m_windows) {
 			w.mark_for_deletion();
@@ -488,6 +480,53 @@ public:
 
 	void delete_marked_windows() {
 		erase_if(m_windows, [](const auto& item) { return item.second.marked_for_deletion(); });
+	}
+
+	const GUID& id() const { return m_id; }
+
+public:
+	Desktop(const GUID& id) : m_id{id} {}
+
+	Desktop(const Desktop& other) = delete;
+	Desktop(Desktop&& other) = default;
+	Desktop& operator=(const Desktop& other) = delete;
+	Desktop& operator=(Desktop&& other) = default;
+
+	static Desktop* current();
+	static Desktop* get(HWND handle);
+	static Desktop* get(GUID id);
+
+	static void update_all();
+
+	const Window* get_window(HWND handle) const {
+		auto it = m_windows.find(handle);
+		return it != m_windows.end() ? &it->second : nullptr;
+	}
+
+	const Window* get_adjacent_window(HWND handle, Direction dir) const {
+		auto* w = get_window(handle);
+		if (!w) {
+			return nullptr;
+		}
+
+		size_t axis = dir == Direction::Left || dir == Direction::Right ? 0 : 1;
+		float sign = dir == Direction::Up || dir == Direction::Left ? 1 : -1;
+		const Window* best_candidate = nullptr;
+		float best_distance = numeric_limits<float>::infinity();
+
+		Vec2 center = w->rect().center();
+
+		for (auto& [_, ow] : m_windows) {
+			float dist = w->rect().distance_with_axis_preference(axis, ow.rect());
+
+			bool is_on_correct_side = sign * (center[axis] - ow.rect().center()[axis]) > 0;
+			if (w != &ow && is_on_correct_side && dist < best_distance) {
+				best_distance = dist;
+				best_candidate = &ow;
+			}
+		}
+
+		return best_candidate;
 	}
 
 	bool empty() const { return m_windows.empty(); }
@@ -499,14 +538,10 @@ public:
 	}
 };
 
-// To simplify our API, we would like to be able to occasionally return a generic empty desktop
-// in case no actual desktop can be obtained. This leads to cleaner user code that then does not
-// need to deal with e.g. null-Desktop* or optional<Desktop>.
-Desktop empty_desktop = {};
 unordered_map<GUID, Desktop> desktops;
 optional<GUID> current_desktop_id = {}; // ID of the desktop the user is currently looking at.
 
-void update_desktops() {
+void Desktop::update_all() {
 	current_desktop_id = {};
 	for (auto& [_, d] : desktops) {
 		d.mark_windows_for_deletion();
@@ -514,19 +549,17 @@ void update_desktops() {
 
 	EnumWindows(
 		[](__in HWND handle, __in LPARAM) {
-			GUID desktop_id;
-			HRESULT result = desktop_manager()->GetWindowDesktopId(handle, &desktop_id);
-			if (result != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
+			optional<GUID> opt_desktop_id = get_window_desktop_id(handle);
+			if (!opt_desktop_id.has_value()) {
 				// Window does not seem to belong to any desktop... can't be managed by this app.
 				return TRUE;
 			}
 
-			// log_info(format("{}: {}.{}.{}.{}", get_window_text(handle), desktop_id.Data1, desktop_id.Data2, desktop_id.Data3, *(uint64_t*)desktop_id.Data4)
-			// );
+			GUID desktop_id = opt_desktop_id.value();
 
 			// If the window's desktop already exists, query it. Otherwise, create
 			// a new desktop object, keep track of it in `desktops`, and use that one.
-			auto insert_result = desktops.insert({desktop_id, Desktop{}});
+			auto insert_result = desktops.insert({desktop_id, Desktop{desktop_id}});
 			auto& desktop = insert_result.first->second;
 			if (!desktop.try_manage(handle)) {
 				// If the desktop can't manage the window, don't consider it as candidate for current desktop.
@@ -556,8 +589,35 @@ void update_desktops() {
 	erase_if(desktops, [](const auto& item) { return item.second.empty(); });
 }
 
-Desktop& current_desktop() {
-	return current_desktop_id.has_value() ? desktops.at(current_desktop_id.value()) : empty_desktop;
+Desktop* Desktop::current() {
+	return current_desktop_id.has_value() ? &desktops.at(current_desktop_id.value()) : nullptr;
+}
+
+Desktop* Desktop::get(HWND handle) {
+	for (auto& [_, d] : desktops) {
+		if (d.get_window(handle)) {
+			return &d;
+		}
+	}
+
+	return nullptr;
+}
+
+Desktop* Desktop::get(GUID id) {
+	auto it = desktops.find(id);
+	return it != desktops.end() ? &it->second : nullptr;
+}
+
+const Window* Window::focused() { return Window::get(GetForegroundWindow()); }
+
+const Window* Window::get(HWND handle) {
+	auto* desktop = Desktop::get(handle);
+	return desktop ? desktop->get_window(handle) : nullptr;
+}
+
+const Window* Window::get_adjacent(Direction dir) const {
+	auto* desktop = Desktop::get(m_handle);
+	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
 class Hotkeys {
@@ -614,8 +674,7 @@ public:
 
 		// Ensure our information about desktops and their contained windows is as up-to-date as
 		// possible before triggering a hotkey to minimize potential for erroneous behavior.
-		update_desktops();
-		current_desktop().print();
+		Desktop::update_all();
 		m_hotkeys[id].cb();
 	}
 
@@ -660,10 +719,10 @@ int main() {
 	try {
 		Hotkeys hotkeys;
 
-		hotkeys.add("alt+h", []() { log_info("left"); });
-		hotkeys.add("alt+j", []() { log_info("down"); });
-		hotkeys.add("alt+k", []() { log_info("up"); });
-		hotkeys.add("alt+l", []() { log_info("right"); });
+		hotkeys.add("alt+h", []() { Window::focused()->get_adjacent(Direction::Left)->focus(); });
+		hotkeys.add("alt+j", []() { Window::focused()->get_adjacent(Direction::Down)->focus(); });
+		hotkeys.add("alt+k", []() { Window::focused()->get_adjacent(Direction::Up)->focus(); });
+		hotkeys.add("alt+l", []() { Window::focused()->get_adjacent(Direction::Right)->focus(); });
 
 		while (true) {
 			hotkeys.check_for_triggers();
