@@ -23,32 +23,32 @@
 // Saves so much typing
 using namespace std;
 
-enum class ESeverity : uint8_t {
+enum class Severity : uint8_t {
 	Debug,
 	Info,
 	Warning,
 	Error,
 };
 
-auto min_severity = ESeverity::Info;
+auto min_severity = Severity::Info;
 
-void log(ESeverity severity, const string& str) {
+void log(Severity severity, const string& str) {
 	if (severity < min_severity) {
 		return;
 	}
 
 	switch (severity) {
-		case ESeverity::Debug: cout << format("DEBUG: {}\n", str); break;
-		case ESeverity::Info: cout << format("INFO: {}\n", str); break;
-		case ESeverity::Warning: cerr << format("WARNING: {}\n", str); break;
-		case ESeverity::Error: cerr << format("ERROR: {}\n", str); break;
+		case Severity::Debug: cout << format("DEBUG: {}\n", str); break;
+		case Severity::Info: cout << format("INFO: {}\n", str); break;
+		case Severity::Warning: cerr << format("WARNING: {}\n", str); break;
+		case Severity::Error: cerr << format("ERROR: {}\n", str); break;
 	}
 }
 
-void log_debug(const string& str) { log(ESeverity::Debug, str); }
-void log_info(const string& str) { log(ESeverity::Info, str); }
-void log_warning(const string& str) { log(ESeverity::Warning, str); }
-void log_error(const string& str) { log(ESeverity::Error, str); }
+void log_debug(const string& str) { log(Severity::Debug, str); }
+void log_info(const string& str) { log(Severity::Info, str); }
+void log_warning(const string& str) { log(Severity::Warning, str); }
+void log_error(const string& str) { log(Severity::Error, str); }
 
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
@@ -62,6 +62,8 @@ void log_error(const string& str) { log(ESeverity::Error, str); }
 
 // Helper math
 struct Vec2 {
+	float x, y;
+
 	Vec2(float c = 0.0f) : Vec2(c, c) {}
 	Vec2(float x, float y) : x{x}, y{y} {}
 
@@ -100,13 +102,17 @@ struct Vec2 {
 	int max_axis() const { return x > y ? 0 : 1; }
 	int min_axis() const { return x > y ? 1 : 0; }
 
-	float x, y;
+	float operator[](size_t idx) const {
+		TWM_ASSERT(idx == 0 || idx == 1);
+		return idx == 0 ? x : y;
+	}
 };
 
 struct Rect {
-	Vec2 top_left;
-	Vec2 bottom_right;
+	Vec2 top_left = {};
+	Vec2 bottom_right = {};
 
+	Rect() = default;
 	Rect(const RECT& r) :
 		top_left{static_cast<float>(r.left), static_cast<float>(r.top)},
 		bottom_right{static_cast<float>(r.right), static_cast<float>(r.bottom)} {}
@@ -117,6 +123,13 @@ struct Rect {
 
 	bool operator!=(const Rect& other) const {
 		return top_left != other.top_left || bottom_right != other.bottom_right;
+	}
+
+	float distance_with_axis_preference(uint32_t axis, const Rect& other) const {
+		auto off_axis = (axis + 1) % 2;
+		auto c = center();
+		auto oc = other.center();
+		return abs(c[axis] - oc[axis]) + max(0.0f, abs(c[off_axis] - oc[off_axis]) - size()[off_axis] / 2);
 	}
 
 	Vec2 center() const { return (top_left + bottom_right) / 2.0f; }
@@ -161,6 +174,12 @@ template <> struct hash<GUID> {
 	size_t operator()(const GUID& x) const {
 		return (size_t)x.Data1 * 73856093 + (size_t)x.Data2 * 19349663 + (size_t)x.Data3 * 83492791 +
 			*(uint64_t*)x.Data4 * 25165843;
+	}
+};
+template <> struct equal_to<GUID> {
+	size_t operator()(const GUID& a, const GUID& b) const {
+		return a.Data1 == b.Data1 && a.Data2 == b.Data2 && a.Data3 == b.Data3 &&
+			*(uint64_t*)a.Data4 == *(uint64_t*)b.Data4;
 	}
 };
 } // namespace std
@@ -366,13 +385,15 @@ IVirtualDesktopManager* desktop_manager() {
 
 // Window management
 class Window {
-	string m_name;
-	Rect m_rect;
-	HWND m_handle;
+	string m_name = "";
+	Rect m_rect = {};
+	HWND m_handle = NULL;
 	bool m_marked_for_deletion = false;
 
-public:
 	Window(HWND handle) : m_name{get_window_text(handle)}, m_rect{get_window_rect(handle)}, m_handle{handle} {}
+
+public:
+	friend class Desktop;
 
 	static optional<Window> focused() {
 		auto handle = GetForegroundWindow();
@@ -386,25 +407,13 @@ public:
 	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
 
 	// Returns true if the name changed
-	bool update() {
+	bool update(const Window& other) {
 		string old_name = m_name;
 		Rect old_rect = m_rect;
-		m_name = get_window_text(m_handle);
-		m_rect = get_window_rect(m_handle);
+		m_name = other.m_name;
+		m_rect = other.m_rect;
 		m_marked_for_deletion = false;
 		return m_name != old_name || m_rect != old_rect;
-	}
-
-	bool can_be_managed() { return m_name.size() > 0 && !IsIconic(m_handle) && IsWindowVisible(m_handle); }
-
-	optional<GUID> desktop_id() {
-		GUID id;
-		HRESULT result = desktop_manager()->GetWindowDesktopId(m_handle, &id);
-		if (result != S_OK) {
-			return {};
-		}
-
-		return id;
 	}
 
 	const string& name() const { return m_name; }
@@ -424,6 +433,13 @@ struct BspNode {
 	variant<HWND, Children> payload;
 };
 
+enum class Direction {
+	Up,
+	Down,
+	Left,
+	Right,
+};
+
 class Desktop {
 	unordered_map<HWND, Window> m_windows;
 	unique_ptr<BspNode> m_root;
@@ -435,24 +451,34 @@ public:
 	Desktop(const Desktop& other) = delete;
 	Desktop(Desktop&& other) = default;
 
-	void manage(Window window) {
-		auto w = m_windows.find(window.handle());
-		if (w != m_windows.end()) {
-			w->second.update();
-		} else {
-			m_windows.insert({window.handle(), window});
-		}
+	bool can_be_managed(const Window& w) {
+		return !w.name().empty() && !IsIconic(w.handle()) && IsWindowVisible(w.handle());
 	}
 
-	optional<Window> adjacent_window(const optional<Window>& w, const Vec2& dir) const {
-		if (!w.has_value() || m_windows.count(w->handle()) == 0) {
-			return {};
+	bool try_manage(HWND handle) {
+		auto w = Window{handle};
+
+		if (!can_be_managed(w)) {
+			return false;
 		}
 
-		TWM_ASSERT(w->handle() == m_windows.at(w->handle()).handle());
+		auto [it, inserted] = m_windows.insert({handle, w});
+		if (!inserted) {
+			it->second.update(w);
+		}
 
-		return {};
+		return true;
 	}
+
+	// optional<Window> adjacent_window(const optional<Window>& w, Direction dir) const {
+	//	if (!w.has_value() || m_windows.count(w->handle()) == 0) {
+	//		return {};
+	//	}
+
+	//	TWM_ASSERT(w->handle() == m_windows.at(w->handle()).handle());
+
+	//	return {};
+	// }
 
 	void mark_windows_for_deletion() {
 		for (auto& [_, w] : m_windows) {
@@ -478,7 +504,7 @@ public:
 // need to deal with e.g. null-Desktop* or optional<Desktop>.
 Desktop empty_desktop = {};
 unordered_map<GUID, Desktop> desktops;
-optional<GUID> current_desktop_id = {};
+optional<GUID> current_desktop_id = {}; // ID of the desktop the user is currently looking at.
 
 void update_desktops() {
 	current_desktop_id = {};
@@ -488,28 +514,36 @@ void update_desktops() {
 
 	EnumWindows(
 		[](__in HWND handle, __in LPARAM) {
-			auto window = Window{handle};
+			GUID desktop_id;
+			HRESULT result = desktop_manager()->GetWindowDesktopId(handle, &desktop_id);
+			if (result != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
+				// Window does not seem to belong to any desktop... can't be managed by this app.
+				return TRUE;
+			}
 
-			if (optional<GUID> desktop_id = window.desktop_id(); desktop_id.has_value() && window.can_be_managed()) {
-				// If the window's desktop already exists, query it. Otherwise, create
-				// a new desktop object, keep track of it in `desktops`, and use that one.
-				auto insert_result = desktops.insert({desktop_id.value(), Desktop{}});
-				auto* desktop = &insert_result.first->second;
-				desktop->manage(window);
+			// log_info(format("{}: {}.{}.{}.{}", get_window_text(handle), desktop_id.Data1, desktop_id.Data2, desktop_id.Data3, *(uint64_t*)desktop_id.Data4)
+			// );
 
-				// If we haven't yet figured out which desktop is the current one, check
-				// whether the window we are currently looking at is on the current desktop.
-				// If so, use that window's desktop.
-				if (!current_desktop_id.has_value()) {
-					BOOL is_current_desktop = 0;
-					HRESULT r = desktop_manager()->IsWindowOnCurrentVirtualDesktop(window.handle(), &is_current_desktop);
-					if (r == S_OK && is_current_desktop != 0) {
-						current_desktop_id = desktop_id;
-					}
+			// If the window's desktop already exists, query it. Otherwise, create
+			// a new desktop object, keep track of it in `desktops`, and use that one.
+			auto insert_result = desktops.insert({desktop_id, Desktop{}});
+			auto& desktop = insert_result.first->second;
+			if (!desktop.try_manage(handle)) {
+				// If the desktop can't manage the window, don't consider it as candidate for current desktop.
+				return TRUE;
+			}
+
+			// If we haven't yet figured out which desktop is the current one, check
+			// whether the window we are currently looking at is on the current desktop.
+			// If so, use that window's desktop.
+			if (!current_desktop_id.has_value()) {
+				BOOL is_current_desktop = 0;
+				HRESULT r = desktop_manager()->IsWindowOnCurrentVirtualDesktop(handle, &is_current_desktop);
+				if (r == S_OK && is_current_desktop != 0) {
+					current_desktop_id = desktop_id;
 				}
 			}
 
-			// Returning TRUE means we want to keep enumerating more windows.
 			return TRUE;
 		},
 		0
