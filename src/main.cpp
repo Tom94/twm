@@ -617,8 +617,15 @@ Desktop* current_desktop() {
 }
 
 int main() {
+	// Required for IVirtualDesktopManager
 	CoInitialize(nullptr);
+
+	// This app represents strings in UTF8 -- the following call makes sure
+	// that non-ASCII characters print correctly in the terminal.
 	SetConsoleOutputCP(CP_UTF8);
+
+	// Reset the error state of the windows API such that later API calls don't
+	// mistakenly get treated as having errored out.
 	SetLastError(0);
 
 	try {
