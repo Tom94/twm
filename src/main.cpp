@@ -120,11 +120,77 @@ public:
 	Desktop& operator=(const Desktop& other) = delete;
 	Desktop& operator=(Desktop&& other) = default;
 
-	static Desktop* current();
-	static Desktop* get(HWND handle);
-	static Desktop* get(GUID id);
+	static auto& all() {
+		static unordered_map<GUID, Desktop> desktops = {};
+		return desktops;
+	}
 
-	static void update_all();
+	// ID of the desktop the user is currently looking at.
+	static auto& current_id() {
+		static optional<GUID> current_desktop_id = {};
+		return current_desktop_id;
+	}
+
+	static void update_all() {
+		current_id() = {};
+		for (auto& [_, d] : all()) {
+			d.mark_windows_for_deletion();
+		}
+
+		EnumWindows(
+			[](__in HWND handle, __in LPARAM) {
+				optional<GUID> opt_desktop_id = get_window_desktop_id(handle);
+				if (!opt_desktop_id.has_value()) {
+					// Window does not seem to belong to any desktop... can't be managed by this app.
+					return TRUE;
+				}
+
+				GUID desktop_id = opt_desktop_id.value();
+
+				// If the window's desktop already exists, query it. Otherwise, create
+				// a new desktop object, keep track of it in `desktops`, and use that one.
+				auto insert_result = all().insert({desktop_id, Desktop{desktop_id}});
+				auto& desktop = insert_result.first->second;
+				if (!desktop.try_manage(handle)) {
+					// If the desktop can't manage the window, don't consider it as candidate for current desktop.
+					return TRUE;
+				}
+
+				// The Windows API does not give us a direct way to query the currently active desktop, but it
+				// allows us to check whether a given Window is on the current desktop. So if we find such a
+				// window, we can deduce that its desktop's GUID is the currently active desktop.
+				if (!current_id().has_value() && is_window_on_current_desktop(handle)) {
+					current_id() = desktop_id;
+				}
+
+				return TRUE;
+			},
+			0
+		);
+
+		for (auto& [_, d] : all()) {
+			d.delete_marked_windows();
+		}
+
+		erase_if(all(), [](const auto& item) { return item.second.empty(); });
+	}
+
+	static Desktop* current() { return current_id().has_value() ? &all().at(current_id().value()) : nullptr; }
+
+	static Desktop* get(HWND handle) {
+		for (auto& [_, d] : all()) {
+			if (d.get_window(handle)) {
+				return &d;
+			}
+		}
+
+		return nullptr;
+	}
+
+	static Desktop* get(GUID id) {
+		auto it = all().find(id);
+		return it != all().end() ? &it->second : nullptr;
+	}
 
 	const Window* get_window(HWND handle) const {
 		auto it = m_windows.find(handle);
@@ -166,72 +232,6 @@ public:
 		}
 	}
 };
-
-unordered_map<GUID, Desktop> desktops;
-optional<GUID> current_desktop_id = {}; // ID of the desktop the user is currently looking at.
-
-void Desktop::update_all() {
-	current_desktop_id = {};
-	for (auto& [_, d] : desktops) {
-		d.mark_windows_for_deletion();
-	}
-
-	EnumWindows(
-		[](__in HWND handle, __in LPARAM) {
-			optional<GUID> opt_desktop_id = get_window_desktop_id(handle);
-			if (!opt_desktop_id.has_value()) {
-				// Window does not seem to belong to any desktop... can't be managed by this app.
-				return TRUE;
-			}
-
-			GUID desktop_id = opt_desktop_id.value();
-
-			// If the window's desktop already exists, query it. Otherwise, create
-			// a new desktop object, keep track of it in `desktops`, and use that one.
-			auto insert_result = desktops.insert({desktop_id, Desktop{desktop_id}});
-			auto& desktop = insert_result.first->second;
-			if (!desktop.try_manage(handle)) {
-				// If the desktop can't manage the window, don't consider it as candidate for current desktop.
-				return TRUE;
-			}
-
-			// The Windows API does not give us a direct way to query the currently active desktop, but it
-			// allows us to check whether a given Window is on the current desktop. So if we find such a
-			// window, we can deduce that its desktop's GUID is the currently active desktop.
-			if (!current_desktop_id.has_value() && is_window_on_current_desktop(handle)) {
-				current_desktop_id = desktop_id;
-			}
-
-			return TRUE;
-		},
-		0
-	);
-
-	for (auto& [_, d] : desktops) {
-		d.delete_marked_windows();
-	}
-
-	erase_if(desktops, [](const auto& item) { return item.second.empty(); });
-}
-
-Desktop* Desktop::current() {
-	return current_desktop_id.has_value() ? &desktops.at(current_desktop_id.value()) : nullptr;
-}
-
-Desktop* Desktop::get(HWND handle) {
-	for (auto& [_, d] : desktops) {
-		if (d.get_window(handle)) {
-			return &d;
-		}
-	}
-
-	return nullptr;
-}
-
-Desktop* Desktop::get(GUID id) {
-	auto it = desktops.find(id);
-	return it != desktops.end() ? &it->second : nullptr;
-}
 
 const Window* Window::focused() { return Window::get(GetForegroundWindow()); }
 
