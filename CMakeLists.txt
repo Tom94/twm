@@ -125,8 +125,10 @@ set(
 	src/main.cpp
 
 	src/common.cpp include/twm/common.h
+	src/hotkey.cpp include/twm/hotkey.h
 	src/logging.cpp include/twm/logging.h
 	src/math.cpp include/twm/math.h
+	src/platform.cpp include/twm/platform.h
 )
 
 # set(TWM_SOURCES ${TWM_SOURCES} resources/icon.rc)

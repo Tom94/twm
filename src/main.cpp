@@ -2,8 +2,10 @@
 // It is published under the GPU GPLv3 license; see LICENSE.txt for details.
 
 #include <twm/common.h>
+#include <twm/hotkey.h>
 #include <twm/logging.h>
 #include <twm/math.h>
+#include <twm/platform.h>
 
 #include <algorithm>
 #include <chrono>
@@ -19,95 +21,6 @@ using namespace std;
 
 namespace twm {
 
-// Windows error handling
-int last_error_code() { return GetLastError(); }
-
-string error_string(int code) {
-	char* s = NULL;
-	FormatMessage(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL,
-		code,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPSTR)&s,
-		0,
-		NULL
-	);
-
-	string result = s;
-	LocalFree(s);
-
-	return result;
-}
-
-string last_error_string() { return trim(error_string(last_error_code())); }
-
-Rect get_window_rect(HWND handle) {
-	RECT r;
-	if (GetWindowRect(handle, &r) == 0) {
-		throw runtime_error{string{"Could not obtain rect: "} + last_error_string()};
-	}
-
-	return {r};
-}
-
-string get_window_text(HWND handle) {
-	int name_length = GetWindowTextLengthW(handle);
-	if (name_length <= 0 || last_error_code() != 0) {
-		SetLastError(0);
-		return "";
-	}
-
-	wstring wname;
-	wname.resize(name_length + 1);
-	GetWindowTextW(handle, wname.data(), (int)wname.size());
-	return utf16_to_utf8(wname);
-}
-
-auto query_desktop_manager() {
-	const CLSID CLSID_ImmersiveShell = {
-		0xC2F03A33, 0x21F5, 0x47FA, {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}
-    };
-
-	IServiceProvider* service_provider = NULL;
-
-	CoInitialize(NULL);
-	HRESULT hr = CoCreateInstance(
-		CLSID_ImmersiveShell, NULL, CLSCTX_LOCAL_SERVER, __uuidof(IServiceProvider), (PVOID*)&service_provider
-	);
-
-	if (FAILED(hr)) {
-		throw runtime_error{string{"Failed to get immersive shell service provider: "} + to_string(hr)};
-	}
-
-	auto guard = ScopeGuard([&]() { service_provider->Release(); });
-
-	IVirtualDesktopManager* desktop_manager;
-	hr = service_provider->QueryService(__uuidof(IVirtualDesktopManager), &desktop_manager);
-
-	if (FAILED(hr)) {
-		throw runtime_error{"Failed to get virtual desktop manager."};
-	}
-
-	SetLastError(0);
-	return desktop_manager;
-}
-
-IVirtualDesktopManager* desktop_manager() {
-	static auto desktop = query_desktop_manager();
-	return desktop;
-}
-
-optional<GUID> get_window_desktop_id(HWND handle) {
-	GUID desktop_id;
-	HRESULT result = desktop_manager()->GetWindowDesktopId(handle, &desktop_id);
-	if (result != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
-		return {};
-	}
-
-	return desktop_id;
-}
-
 enum class Direction {
 	Up,
 	Down,
@@ -115,7 +28,6 @@ enum class Direction {
 	Right,
 };
 
-// Window management
 class Window {
 	string m_name = "";
 	Rect m_rect = {};
@@ -283,15 +195,11 @@ void Desktop::update_all() {
 				return TRUE;
 			}
 
-			// If we haven't yet figured out which desktop is the current one, check
-			// whether the window we are currently looking at is on the current desktop.
-			// If so, use that window's desktop.
-			if (!current_desktop_id.has_value()) {
-				BOOL is_current_desktop = 0;
-				HRESULT r = desktop_manager()->IsWindowOnCurrentVirtualDesktop(handle, &is_current_desktop);
-				if (r == S_OK && is_current_desktop != 0) {
-					current_desktop_id = desktop_id;
-				}
+			// The Windows API does not give us a direct way to query the currently active desktop, but it
+			// allows us to check whether a given Window is on the current desktop. So if we find such a
+			// window, we can deduce that its desktop's GUID is the currently active desktop.
+			if (!current_desktop_id.has_value() && is_window_on_current_desktop(handle)) {
+				current_desktop_id = desktop_id;
 			}
 
 			return TRUE;
@@ -345,123 +253,26 @@ const Window* Window::get_adjacent(Direction dir) const {
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
-// Hotkey management
-using Callback = function<void()>;
+Hotkeys hotkeys;
 
-struct Hotkey {
-	int id;
-	function<void()> cb;
-};
-
-unordered_map<string, UINT> string_to_modifier = {
-	{"ctrl",    MOD_CONTROL},
-	{"control", MOD_CONTROL},
-	{"alt",     MOD_ALT    },
-	{"super",   MOD_WIN    },
-	{"win",     MOD_WIN    },
-	{"shift",   MOD_SHIFT  },
-};
-
-unordered_map<string, UINT> string_to_keycode = {
-	{"back",      VK_BACK  },
-	{"backspace", VK_BACK  },
-	{"tab",       VK_TAB   },
-	{"return",    VK_RETURN},
-	{"enter",     VK_RETURN},
-	{"escape",    VK_ESCAPE},
-	{"esc",       VK_ESCAPE},
-	{"space",     VK_SPACE },
-};
-
-class Hotkeys {
-	vector<Hotkey> m_hotkeys;
-
-public:
-	~Hotkeys() { clear(); }
-
-	void add(const string& keycombo, Callback cb) {
-		int id = (int)m_hotkeys.size();
-		auto parts = split(keycombo, "+");
-		UINT mod = 0;
-		UINT keycode = 0;
-
-		// keycombo is of the form mod1+mod2+...+keycode
-		// case insensitive and with optional spaces. Parse below.
-		for (const auto& part : parts) {
-			auto name = to_lower(trim(part));
-
-			if (string_to_modifier.count(name) > 0) {
-				mod |= string_to_modifier[name];
-				continue;
-			}
-
-			// If none of the above modifiers is given, that means we are given a keycode.
-			// Only one keycode per keybinding is allowed -- check for this.
-			if (keycode != 0) {
-				throw runtime_error{string{"Error registering "} + keycombo + ": more than one keycode"};
-			}
-
-			if (string_to_keycode.count(name) > 0) {
-				keycode = string_to_keycode[name];
-				continue;
-			}
-
-			if (name.size() != 1) {
-				throw runtime_error{string{"Error registering "} + keycombo + ": unknown keycode"};
-			}
-
-			keycode = (char)toupper(name[0]);
-		}
-
-		if (RegisterHotKey(nullptr, id, mod, keycode) == 0) {
-			throw runtime_error{string{"Error registering "} + keycombo + ": " + last_error_string()};
-		}
-
-		m_hotkeys.emplace_back(id, cb);
-	}
-
-	void trigger(int id) const {
-		if (id < 0 || id >= (int)m_hotkeys.size()) {
-			throw runtime_error{"Invalid hotkey id"};
-		}
-
-		// Ensure our information about desktops and their contained windows is as up-to-date as
-		// possible before triggering a hotkey to minimize potential for erroneous behavior.
-		Desktop::update_all();
-		m_hotkeys[id].cb();
-	}
-
-	void check_for_triggers() const {
-		MSG msg = {};
-		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
-			switch (msg.message) {
-				case WM_HOTKEY: {
-					trigger((int)msg.wParam);
-				} break;
-				default: {
-					log_warning(format("Unknown message: {}", msg.message));
-				} break;
-			}
+void tick() {
+	MSG msg = {};
+	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
+		switch (msg.message) {
+			case WM_HOTKEY: {
+				// Ensure our information about desktops and their contained windows is as up-to-date as
+				// possible before triggering a hotkey to minimize potential for erroneous behavior.
+				Desktop::update_all();
+				hotkeys.trigger((int)msg.wParam);
+			} break;
+			default: {
+				log_warning(format("Unknown message: {}", msg.message));
+			} break;
 		}
 	}
-
-	void clear() {
-		for (size_t i = 0; i < m_hotkeys.size(); ++i) {
-			// We do not care about errors in the unregistering process here.
-			// Simply try to unbind all hotkeys and hope for the best -- there
-			// is nothing we can do if unbinding fails.
-			UnregisterHotKey(nullptr, (int)i);
-		}
-
-		m_hotkeys.clear();
-	}
-};
-
-} // namespace twm
+}
 
 int main() {
-	using namespace twm;
-
 	// Required for IVirtualDesktopManager
 	CoInitialize(nullptr);
 
@@ -474,18 +285,23 @@ int main() {
 	SetLastError(0);
 
 	try {
-		Hotkeys hotkeys;
-
 		hotkeys.add("alt+h", []() { Window::focus_adjacent(Direction::Left); });
 		hotkeys.add("alt+j", []() { Window::focus_adjacent(Direction::Down); });
 		hotkeys.add("alt+k", []() { Window::focus_adjacent(Direction::Up); });
 		hotkeys.add("alt+l", []() { Window::focus_adjacent(Direction::Right); });
 
 		while (true) {
-			hotkeys.check_for_triggers();
+			tick();
 			this_thread::sleep_for(1ms);
 		}
 	} catch (const runtime_error& e) {
 		log_error(format("Uncaught exception: {}", e.what()));
+		return -1;
 	}
+
+	return 0;
 }
+
+} // namespace twm
+
+int main() { return twm::main(); }
