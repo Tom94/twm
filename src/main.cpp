@@ -253,8 +253,6 @@ const Window* Window::get_adjacent(Direction dir) const {
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
-Hotkeys hotkeys;
-
 void tick() {
 	MSG msg = {};
 	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
@@ -263,7 +261,7 @@ void tick() {
 				// Ensure our information about desktops and their contained windows is as up-to-date as
 				// possible before triggering a hotkey to minimize potential for erroneous behavior.
 				Desktop::update_all();
-				hotkeys.trigger((int)msg.wParam);
+				Hotkeys::global().trigger((int)msg.wParam);
 			} break;
 			default: {
 				log_warning(format("Unknown message: {}", msg.message));
@@ -285,10 +283,10 @@ int main() {
 	SetLastError(0);
 
 	try {
-		hotkeys.add("alt+h", []() { Window::focus_adjacent(Direction::Left); });
-		hotkeys.add("alt+j", []() { Window::focus_adjacent(Direction::Down); });
-		hotkeys.add("alt+k", []() { Window::focus_adjacent(Direction::Up); });
-		hotkeys.add("alt+l", []() { Window::focus_adjacent(Direction::Right); });
+		Hotkeys::global().add("alt+h", []() { Window::focus_adjacent(Direction::Left); });
+		Hotkeys::global().add("alt+j", []() { Window::focus_adjacent(Direction::Down); });
+		Hotkeys::global().add("alt+k", []() { Window::focus_adjacent(Direction::Up); });
+		Hotkeys::global().add("alt+l", []() { Window::focus_adjacent(Direction::Right); });
 
 		while (true) {
 			tick();

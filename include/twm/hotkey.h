@@ -19,8 +19,15 @@ struct Hotkey {
 class Hotkeys {
 	std::vector<Hotkey> m_hotkeys;
 
+	Hotkeys() {}
+
 public:
 	~Hotkeys() { clear(); }
+
+	static auto& global() {
+		static Hotkeys hotkeys;
+		return hotkeys;
+	}
 
 	void add(const std::string& keycombo, Callback cb);
 	void trigger(int id) const;
