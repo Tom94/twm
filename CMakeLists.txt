@@ -119,15 +119,22 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_FLAGS MATCHES "-stdl
     endif()
 endif()
 
-set(TWM_SOURCES src/main.cpp)
+set(
+	TWM_SOURCES
+
+	src/main.cpp
+
+	src/common.cpp include/twm/common.h
+	src/logging.cpp include/twm/logging.h
+	src/math.cpp include/twm/math.h
+)
 
 # set(TWM_SOURCES ${TWM_SOURCES} resources/icon.rc)
 # set(TWM_SOURCES ${TWM_SOURCES} resources/twm.manifest)
 
 add_executable(twm ${TWM_SOURCES})
-target_link_libraries(twm ${TWM_LIBS})
-
-# target_include_directories(twm "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(twm PUBLIC ${TWM_LIBS})
+target_include_directories(twm PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(TWM_DEFINITIONS -DTWM_VERSION="${TWM_VERSION_ARCH}")
 target_compile_definitions(twm PUBLIC ${TWM_DEFINITIONS})

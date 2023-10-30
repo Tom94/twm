@@ -1,280 +1,23 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the GPU GPLv3 license; see LICENSE.txt for details.
 
+#include <twm/common.h>
+#include <twm/logging.h>
+#include <twm/math.h>
+
 #include <algorithm>
 #include <chrono>
 #include <functional>
-#include <iostream>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <variant>
 
-#define NOMINMAX
-#include <ShlObj.h>
-#include <Windows.h>
-#ifdef far
-#	undef far
-#	undef near
-#endif
-
 // Saves so much typing
 using namespace std;
 
-enum class Severity : uint8_t {
-	Debug,
-	Info,
-	Warning,
-	Error,
-};
-
-auto min_severity = Severity::Info;
-
-void log(Severity severity, const string& str) {
-	if (severity < min_severity) {
-		return;
-	}
-
-	switch (severity) {
-		case Severity::Debug: cout << format("DEBUG: {}\n", str); break;
-		case Severity::Info: cout << format("INFO: {}\n", str); break;
-		case Severity::Warning: cerr << format("WARNING: {}\n", str); break;
-		case Severity::Error: cerr << format("ERROR: {}\n", str); break;
-	}
-}
-
-void log_debug(const string& str) { log(Severity::Debug, str); }
-void log_info(const string& str) { log(Severity::Info, str); }
-void log_warning(const string& str) { log(Severity::Warning, str); }
-void log_error(const string& str) { log(Severity::Error, str); }
-
-#define STRINGIFY(x) #x
-#define STR(x) STRINGIFY(x)
-#define FILE_LINE __FILE__ ":" STR(__LINE__)
-#define TWM_ASSERT(x)                                                \
-	do {                                                             \
-		if (!(x)) {                                                  \
-			throw runtime_error{string{FILE_LINE " " #x " failed"}}; \
-		}                                                            \
-	} while (0);
-
-// Helper math
-struct Vec2 {
-	float x, y;
-
-	Vec2(float c = 0.0f) : Vec2(c, c) {}
-	Vec2(float x, float y) : x{x}, y{y} {}
-
-	static Vec2 zero() { return Vec2{0.0f}; }
-	static Vec2 ones() { return Vec2{1.0f}; }
-
-	Vec2& operator/=(float other) { return *this = *this / other; }
-	Vec2& operator*=(float other) { return *this = *this * other; }
-	Vec2& operator-=(float other) { return *this = *this - other; }
-	Vec2& operator+=(float other) { return *this = *this + other; }
-
-	Vec2 operator/(float other) const { return {x / other, y / other}; }
-	Vec2 operator*(float other) const { return {x * other, y * other}; }
-	Vec2 operator-(float other) const { return {x - other, y - other}; }
-	Vec2 operator+(float other) const { return {x + other, y + other}; }
-
-	Vec2& operator/=(const Vec2& other) { return *this = *this / other; }
-	Vec2& operator*=(const Vec2& other) { return *this = *this * other; }
-	Vec2& operator-=(const Vec2& other) { return *this = *this - other; }
-	Vec2& operator+=(const Vec2& other) { return *this = *this + other; }
-
-	Vec2 operator/(const Vec2& other) const { return {x / other.x, y / other.y}; }
-	Vec2 operator*(const Vec2& other) const { return {x * other.x, y * other.y}; }
-	Vec2 operator-(const Vec2& other) const { return {x - other.x, y - other.y}; }
-	Vec2 operator+(const Vec2& other) const { return {x + other.x, y + other.y}; }
-
-	bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
-	bool operator!=(const Vec2& other) const { return x != other.x || y != other.y; }
-
-	float length_sq() const { return x * x + y * y; }
-	float length() const { return sqrt(length_sq()); }
-	float prod() const { return x * y; }
-	float sum() const { return x + y; }
-	float max() const { return ::max(x, y); }
-	float min() const { return ::min(x, y); }
-	int max_axis() const { return x > y ? 0 : 1; }
-	int min_axis() const { return x > y ? 1 : 0; }
-
-	float operator[](size_t idx) const {
-		TWM_ASSERT(idx == 0 || idx == 1);
-		return idx == 0 ? x : y;
-	}
-};
-
-struct Rect {
-	Vec2 top_left = {};
-	Vec2 bottom_right = {};
-
-	Rect() = default;
-	Rect(const RECT& r) :
-		top_left{static_cast<float>(r.left), static_cast<float>(r.top)},
-		bottom_right{static_cast<float>(r.right), static_cast<float>(r.bottom)} {}
-
-	bool operator==(const Rect& other) const {
-		return top_left == other.top_left && bottom_right == other.bottom_right;
-	}
-
-	bool operator!=(const Rect& other) const {
-		return top_left != other.top_left || bottom_right != other.bottom_right;
-	}
-
-	float distance_with_axis_preference(uint32_t axis, const Rect& other) const {
-		auto off_axis = (axis + 1) % 2;
-		auto c = center();
-		auto oc = other.center();
-		return abs(c[axis] - oc[axis]) + max(0.0f, abs(c[off_axis] - oc[off_axis]) - size()[off_axis] / 2);
-	}
-
-	Vec2 center() const { return (top_left + bottom_right) / 2.0f; }
-	Vec2 size() const { return bottom_right - top_left; }
-	Vec2 area() const { return size().prod(); }
-};
-
-ostream& operator<<(ostream& os, const Vec2& v) { return os << "[" << v.x << ", " << v.y << "]"; }
-
-ostream& operator<<(ostream& os, const Rect& r) {
-	return os << "[top_left=" << r.top_left << ", bottom_right=" << r.bottom_right << "]";
-}
-
-// hash_combine from https://stackoverflow.com/a/50978188
-template <typename T> T xorshift(T n, int i) { return n ^ (n >> i); }
-
-inline uint32_t distribute(uint32_t n) {
-	uint32_t p = 0x55555555ul; // pattern of alternating 0 and 1
-	uint32_t c = 3423571495ul; // random uneven integer constant;
-	return c * xorshift(p * xorshift(n, 16), 16);
-}
-
-inline uint64_t distribute(uint64_t n) {
-	uint64_t p = 0x5555555555555555ull;   // pattern of alternating 0 and 1
-	uint64_t c = 17316035218449499591ull; // random uneven integer constant;
-	return c * xorshift(p * xorshift(n, 32), 32);
-}
-
-template <typename T, typename S>
-constexpr typename enable_if<is_unsigned<T>::value, T>::type rotl(const T n, const S i) {
-	const T m = (numeric_limits<T>::digits - 1);
-	const T c = i & m;
-	return (n << c) | (n >> (((T)0 - c) & m)); // this is usually recognized by the compiler to mean rotation
-}
-
-template <typename T> size_t hash_combine(size_t seed, const T& v) {
-	return rotl(seed, numeric_limits<size_t>::digits / 3) ^ distribute(hash<T>{}(v));
-}
-
-namespace std {
-template <> struct hash<GUID> {
-	size_t operator()(const GUID& x) const {
-		return (size_t)x.Data1 * 73856093 + (size_t)x.Data2 * 19349663 + (size_t)x.Data3 * 83492791 +
-			*(uint64_t*)x.Data4 * 25165843;
-	}
-};
-template <> struct equal_to<GUID> {
-	size_t operator()(const GUID& a, const GUID& b) const {
-		return a.Data1 == b.Data1 && a.Data2 == b.Data2 && a.Data3 == b.Data3 &&
-			*(uint64_t*)a.Data4 == *(uint64_t*)b.Data4;
-	}
-};
-} // namespace std
-
-// Convenience string processing functions
-string utf16_to_utf8(const wstring& utf16) {
-	string utf8;
-	if (!utf16.empty()) {
-		int size = WideCharToMultiByte(CP_UTF8, 0, &utf16[0], (int)utf16.size(), NULL, 0, NULL, NULL);
-		utf8.resize(size, 0);
-		WideCharToMultiByte(CP_UTF8, 0, &utf16[0], (int)utf16.size(), &utf8[0], size, NULL, NULL);
-	}
-	return utf8;
-}
-
-wstring utf8_to_utf16(const string& utf8) {
-	wstring utf16;
-	if (!utf8.empty()) {
-		int size = MultiByteToWideChar(CP_UTF8, 0, &utf8[0], (int)utf8.size(), NULL, 0);
-		utf16.resize(size, 0);
-		MultiByteToWideChar(CP_UTF8, 0, &utf8[0], (int)utf8.size(), &utf16[0], size);
-	}
-	return utf16;
-}
-
-string to_lower(string str) {
-	transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)tolower(c); });
-	return str;
-}
-
-string ltrim(string s) {
-	s.erase(s.begin(), find_if(s.begin(), s.end(), [](char c) { return !isspace(c); }));
-	return s;
-}
-
-string rtrim(string s) {
-	s.erase(find_if(s.rbegin(), s.rend(), [](char c) { return !isspace(c); }).base(), s.end());
-	return s;
-}
-
-string trim(string s) { return ltrim(rtrim(s)); }
-
-template <typename T> string join(const T& components, const string& delim) {
-	ostringstream s;
-	for (const auto& component : components) {
-		if (&components[0] != &component) {
-			s << delim;
-		}
-		s << component;
-	}
-
-	return s.str();
-}
-
-vector<string> split(string text, const string& delim) {
-	vector<string> result;
-	size_t begin = 0;
-	while (true) {
-		size_t end = text.find_first_of(delim, begin);
-		if (end == string::npos) {
-			result.emplace_back(text.substr(begin));
-			return result;
-		} else {
-			result.emplace_back(text.substr(begin, end - begin));
-			begin = end + 1;
-		}
-	}
-
-	return result;
-}
-
-class ScopeGuard {
-public:
-	ScopeGuard() = default;
-	ScopeGuard(const function<void()>& callback) : m_callback{callback} {}
-	ScopeGuard(function<void()>&& callback) : m_callback{move(callback)} {}
-	ScopeGuard& operator=(const ScopeGuard& other) = delete;
-	ScopeGuard(const ScopeGuard& other) = delete;
-	ScopeGuard& operator=(ScopeGuard&& other) {
-		swap(m_callback, other.m_callback);
-		return *this;
-	}
-
-	ScopeGuard(ScopeGuard&& other) { *this = move(other); }
-	~ScopeGuard() {
-		if (m_callback) {
-			m_callback();
-		}
-	}
-
-	void disarm() { m_callback = {}; }
-
-private:
-	function<void()> m_callback;
-};
+namespace twm {
 
 // Windows error handling
 int last_error_code() { return GetLastError(); }
@@ -298,34 +41,6 @@ string error_string(int code) {
 }
 
 string last_error_string() { return trim(error_string(last_error_code())); }
-
-// Hotkey management
-using Callback = function<void()>;
-
-struct Hotkey {
-	int id;
-	function<void()> cb;
-};
-
-unordered_map<string, UINT> string_to_modifier = {
-	{"ctrl",    MOD_CONTROL},
-	{"control", MOD_CONTROL},
-	{"alt",     MOD_ALT    },
-	{"super",   MOD_WIN    },
-	{"win",     MOD_WIN    },
-	{"shift",   MOD_SHIFT  },
-};
-
-unordered_map<string, UINT> string_to_keycode = {
-	{"back",      VK_BACK  },
-	{"backspace", VK_BACK  },
-	{"tab",       VK_TAB   },
-	{"return",    VK_RETURN},
-	{"enter",     VK_RETURN},
-	{"escape",    VK_ESCAPE},
-	{"esc",       VK_ESCAPE},
-	{"space",     VK_SPACE },
-};
 
 Rect get_window_rect(HWND handle) {
 	RECT r;
@@ -630,6 +345,34 @@ const Window* Window::get_adjacent(Direction dir) const {
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
+// Hotkey management
+using Callback = function<void()>;
+
+struct Hotkey {
+	int id;
+	function<void()> cb;
+};
+
+unordered_map<string, UINT> string_to_modifier = {
+	{"ctrl",    MOD_CONTROL},
+	{"control", MOD_CONTROL},
+	{"alt",     MOD_ALT    },
+	{"super",   MOD_WIN    },
+	{"win",     MOD_WIN    },
+	{"shift",   MOD_SHIFT  },
+};
+
+unordered_map<string, UINT> string_to_keycode = {
+	{"back",      VK_BACK  },
+	{"backspace", VK_BACK  },
+	{"tab",       VK_TAB   },
+	{"return",    VK_RETURN},
+	{"enter",     VK_RETURN},
+	{"escape",    VK_ESCAPE},
+	{"esc",       VK_ESCAPE},
+	{"space",     VK_SPACE },
+};
+
 class Hotkeys {
 	vector<Hotkey> m_hotkeys;
 
@@ -714,7 +457,11 @@ public:
 	}
 };
 
+} // namespace twm
+
 int main() {
+	using namespace twm;
+
 	// Required for IVirtualDesktopManager
 	CoInitialize(nullptr);
 
