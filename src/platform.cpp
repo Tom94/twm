@@ -4,6 +4,8 @@
 #include <twm/common.h>
 #include <twm/platform.h>
 
+#include <winuser.h>
+
 using namespace std;
 
 namespace twm {
@@ -64,6 +66,20 @@ string get_window_text(HWND handle) {
 	wname.resize(name_length + 1);
 	GetWindowTextW(handle, wname.data(), (int)wname.size());
 	return utf16_to_utf8(wname);
+}
+
+bool terminate_process(HWND handle) {
+	DWORD process_id = 0;
+	if (GetWindowThreadProcessId(handle, &process_id) == 0 || process_id == 0) {
+		return false;
+	}
+
+	HANDLE process = OpenProcess(PROCESS_TERMINATE, 0, process_id);
+	return process && TerminateProcess(process, 0) != 0;
+}
+
+bool close_window(HWND handle) {
+	return PostMessage(handle, WM_CLOSE, 0, 0) != 0;
 }
 
 auto query_desktop_manager() {

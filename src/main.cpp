@@ -63,6 +63,8 @@ public:
 	Window* get_adjacent(Direction dir) const;
 
 	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
+	bool terminate() const { return terminate_process(m_handle); }
+	bool close() const { return close_window(m_handle); }
 
 	const string& name() const { return m_name; }
 	const Rect& rect() const { return m_rect; }
@@ -372,6 +374,12 @@ int main() {
 		Hotkeys::global().add("alt+shift+j", []() { Window::swap_adjacent(Direction::Down); });
 		Hotkeys::global().add("alt+shift+k", []() { Window::swap_adjacent(Direction::Up); });
 		Hotkeys::global().add("alt+shift+l", []() { Window::swap_adjacent(Direction::Right); });
+
+		Hotkeys::global().add("alt+shift+q", []() {
+			if (auto* w = Window::focused()) {
+				w->close();
+			}
+		});
 
 		while (true) {
 			tick(cfg);
