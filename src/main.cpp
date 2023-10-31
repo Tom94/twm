@@ -253,7 +253,7 @@ public:
 			bool is_on_correct_side = (center - ow.rect().center()[axis] > 0) ==
 				(dir == Direction::Up || dir == Direction::Left);
 
-			if (w != &ow && is_on_correct_side && dist < best_distance) {
+			if (w != &ow && is_on_correct_side && dist <= best_distance) {
 				best_distance = dist;
 				best_candidate = &ow;
 			}
