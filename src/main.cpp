@@ -30,6 +30,16 @@ enum class Direction {
 	Right,
 };
 
+Direction opposite(Direction dir) {
+	switch (dir) {
+		case Direction::Up: return Direction::Down;
+		case Direction::Down: return Direction::Up;
+		case Direction::Right: return Direction::Left;
+		case Direction::Left: return Direction::Right;
+		default: throw runtime_error{"opposite: invalid dir"};
+	}
+}
+
 class Window {
 	string m_name = "";
 	Rect m_rect = {};
@@ -40,7 +50,10 @@ class Window {
 	bool m_marked_for_deletion = false;
 
 	Window(HWND handle, const GUID& desktop_id) :
-		m_name{get_window_text(handle)}, m_rect{get_window_frame_bounds(handle)}, m_handle{handle}, m_desktop_id{desktop_id} {}
+		m_name{get_window_text(handle)},
+		m_rect{get_window_frame_bounds(handle)},
+		m_handle{handle},
+		m_desktop_id{desktop_id} {}
 
 	// Returns true if the name changed
 	bool update(const Window& other) {
@@ -62,7 +75,8 @@ public:
 	static Window* focused();
 	static bool focus_adjacent(Direction dir);
 	static bool focus_adjacent_or_default(Direction dir);
-	static void swap_adjacent(Direction dir);
+	static bool swap_adjacent(Direction dir);
+	static bool move_to_adjacent_desktop(Direction dir);
 	static Window* get(HWND handle);
 
 	Window* get_adjacent(Direction dir) const;
@@ -83,9 +97,13 @@ public:
 
 	const string& name() const { return m_name; }
 	const Rect& rect() const { return m_rect; }
-	void set_rect(const Rect& r) {
-		set_window_frame_bounds(m_handle, r);
+	bool set_rect(const Rect& r) {
+		if (!set_window_frame_bounds(m_handle, r)) {
+			return false;
+		}
+
 		m_rect = r;
+		return true;
 	}
 
 	HWND handle() const { return m_handle; }
@@ -129,6 +147,8 @@ class Desktop {
 		return true;
 	}
 
+	void unmanage(HWND handle) { m_windows.erase(handle); }
+
 	void pre_update() {
 		for (auto& [_, w] : m_windows) {
 			w.mark_for_deletion();
@@ -141,8 +161,6 @@ class Desktop {
 			m_last_focus = nullptr;
 		}
 	}
-
-	const GUID& id() const { return m_id; }
 
 public:
 	Desktop(const GUID& id) : m_id{id} {}
@@ -225,6 +243,24 @@ public:
 		return it != all().end() ? &it->second : nullptr;
 	}
 
+	static void focus_adjacent(Direction dir) {
+		if (dir != Direction::Left && dir != Direction::Right) {
+			throw runtime_error{"Desktops can only be focused left or right"};
+		}
+
+		// HACK HACK HACK: Windows does not provide an API to switch to adjacent
+		// desktops, so we send the default hotkey combination for switching desktops
+		// to the system. This has the potential for all sorts of breakage like keyboard
+		// race conditions, conflicts with user-held keys, or changes in the shortcut.
+		// In the future, we should probably use IVirtualDesktopManagerInternal, despite
+		// it being an API that may break at any point...
+		Hotkeys::send(format("ctrl+win+{}", dir == Direction::Left ? "left" : "right"));
+
+		// After switching desktops, re-run a full update to ensure the current desktop
+		// is correctly registered.
+		Desktop::update_all();
+	}
+
 	Window* last_focus_or_default() {
 		if (auto it = m_windows.find(m_last_focus); it != m_windows.end()) {
 			return &it->second;
@@ -245,6 +281,18 @@ public:
 
 		auto* w = last_focus_or_default();
 		return w && w->focus();
+	}
+
+	bool move_window_to_here(HWND handle) {
+		if (!move_window_to_desktop(handle, m_id)) {
+			return false;
+		}
+
+		if (auto* prev_desktop = Desktop::get(handle)) {
+			prev_desktop->unmanage(handle);
+		}
+
+		return try_manage(handle, false);
 	}
 
 	Window* get_window(HWND handle) {
@@ -287,6 +335,8 @@ public:
 
 	bool empty() const { return m_windows.empty(); }
 
+	const GUID& id() const { return m_id; }
+
 	void print() const {
 		for (auto& [_, w] : m_windows) {
 			log_info(w.name());
@@ -318,17 +368,42 @@ bool Window::focus_adjacent_or_default(Direction dir) {
 	return false;
 }
 
-void Window::swap_adjacent(Direction dir) {
+bool Window::swap_adjacent(Direction dir) {
 	if (auto* focused = Window::focused()) {
 		if (auto* adj = focused->get_adjacent(dir)) {
 			adj->update_last_interacted_time();
 			focused->update_last_interacted_time();
 
 			Rect tmp = focused->rect();
-			focused->set_rect(adj->rect());
-			adj->set_rect(tmp);
+
+			bool success = true;
+			success &= focused->set_rect(adj->rect());
+			success &= adj->set_rect(tmp);
+			return success;
 		}
 	}
+
+	return false;
+}
+
+// The following is currently broken. Windows does not give permission
+// to move windows that aren't owned by this process -- tough luck.
+// TODO: map IVirtualDesktopManagerInternal and use it instead while
+// dealing with potential breakage.
+bool Window::move_to_adjacent_desktop(Direction dir) {
+	if (auto* focused = Window::focused()) {
+		HWND handle = focused->handle();
+		Desktop::focus_adjacent(dir);
+		if (auto* desktop = Desktop::current()) {
+			if (desktop->move_window_to_here(handle)) {
+				auto* window = desktop->get_window(handle);
+				TWM_ASSERT(window);
+				return window->focus();
+			}
+		}
+	}
+
+	return false;
 }
 
 Window* Window::get(HWND handle) {
@@ -398,6 +473,9 @@ int main() {
 		Hotkeys::global().add("alt+shift+j", []() { Window::swap_adjacent(Direction::Down); });
 		Hotkeys::global().add("alt+shift+k", []() { Window::swap_adjacent(Direction::Up); });
 		Hotkeys::global().add("alt+shift+l", []() { Window::swap_adjacent(Direction::Right); });
+
+		Hotkeys::global().add("alt+shift+1", []() { Window::move_to_adjacent_desktop(Direction::Left); });
+		Hotkeys::global().add("alt+shift+2", []() { Window::move_to_adjacent_desktop(Direction::Right); });
 
 		Hotkeys::global().add("alt+shift+q", []() {
 			if (auto* w = Window::focused()) {

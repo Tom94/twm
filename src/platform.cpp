@@ -29,12 +29,12 @@ string error_string(int code) {
 	string result = s;
 	LocalFree(s);
 
-	return result;
+	return trim(result);
 }
 
-string last_error_string() { return trim(error_string(last_error_code())); }
+string last_error_string() { return error_string(last_error_code()); }
 
-void set_window_rect(HWND handle, const Rect& r) {
+bool set_window_rect(HWND handle, const Rect& r) {
 	if (SetWindowPos(
 			handle,
 			nullptr,
@@ -44,8 +44,11 @@ void set_window_rect(HWND handle, const Rect& r) {
 			(LONG)r.size().y,
 			SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER
 		) == 0) {
-		throw runtime_error{format("Could not set rect: {}", last_error_string())};
+		log_warning("Could not set rect: {}", last_error_string());
+		return false;
 	}
+
+	return true;
 }
 
 Rect get_window_rect(HWND handle) {
@@ -58,7 +61,7 @@ Rect get_window_rect(HWND handle) {
 	return {r};
 }
 
-void set_window_frame_bounds(HWND handle, const Rect& r) {
+bool set_window_frame_bounds(HWND handle, const Rect& r) {
 	// In an ideal world, we would use the Windows API to directly set the
 	// window's frame bounds, but, alas, no such API function exists. As a
 	// workaround, we compute the current margin between the window's rect
@@ -73,7 +76,10 @@ Rect get_window_frame_bounds(HWND handle) {
 	if (HRESULT result = DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r)) != S_OK) {
 		static bool warned = false;
 		if (!warned) {
-			log_warning("DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS) failed: {}. Falling back to GetWindowRect.");
+			log_warning(
+				"DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS) failed: {}. Falling back to GetWindowRect.",
+				error_string(result)
+			);
 			warned = true;
 		}
 
@@ -155,6 +161,14 @@ bool is_window_on_current_desktop(HWND handle) {
 	BOOL is_current_desktop = 0;
 	HRESULT r = desktop_manager()->IsWindowOnCurrentVirtualDesktop(handle, &is_current_desktop);
 	return r == S_OK && is_current_desktop != 0;
+}
+
+bool move_window_to_desktop(HWND handle, const GUID& desktop_id) {
+	HRESULT res = desktop_manager()->MoveWindowToDesktop(handle, desktop_id);
+	if (res != S_OK) {
+		log_warning("Failed to move window to desktop: {}", error_string(res));
+	}
+	return res == S_OK;
 }
 
 } // namespace twm

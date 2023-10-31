@@ -23,9 +23,9 @@ std::string last_error_string();
 // be a bit larger). In most situations, it is therefore
 // recommended to use the *_window_frame_bounds functions
 // and not the *_window_rect functions.
-void set_window_rect(HWND handle, const Rect& r);
+bool set_window_rect(HWND handle, const Rect& r);
 Rect get_window_rect(HWND handle);
-void set_window_frame_bounds(HWND handle, const Rect& r);
+bool set_window_frame_bounds(HWND handle, const Rect& r);
 Rect get_window_frame_bounds(HWND handle);
 
 std::string get_window_text(HWND handle);
@@ -34,5 +34,6 @@ bool close_window(HWND handle);
 
 std::optional<GUID> get_window_desktop_id(HWND handle);
 bool is_window_on_current_desktop(HWND handle);
+bool move_window_to_desktop(HWND handle, const GUID& desktop_id);
 
 } // namespace twm
