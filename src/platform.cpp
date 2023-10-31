@@ -2,8 +2,10 @@
 // It is published under the GPU GPLv3 license; see LICENSE.txt for details.
 
 #include <twm/common.h>
+#include <twm/logging.h>
 #include <twm/platform.h>
 
+#include <dwmapi.h>
 #include <winuser.h>
 
 using namespace std;
@@ -48,7 +50,22 @@ void set_window_rect(HWND handle, const Rect& r) {
 
 Rect get_window_rect(HWND handle) {
 	RECT r;
+
 	if (GetWindowRect(handle, &r) == 0) {
+		throw runtime_error{string{"Could not obtain rect: "} + last_error_string()};
+	}
+
+	return {r};
+}
+
+void set_window_frame_bounds(HWND handle, const Rect& r) {
+	Rect margin = get_window_rect(handle) - get_window_frame_bounds(handle);
+	return set_window_rect(handle, r + margin);
+}
+
+Rect get_window_frame_bounds(HWND handle) {
+	RECT r;
+	if (HRESULT result = DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r)) != S_OK) {
 		throw runtime_error{string{"Could not obtain rect: "} + last_error_string()};
 	}
 
@@ -78,9 +95,7 @@ bool terminate_process(HWND handle) {
 	return process && TerminateProcess(process, 0) != 0;
 }
 
-bool close_window(HWND handle) {
-	return PostMessage(handle, WM_CLOSE, 0, 0) != 0;
-}
+bool close_window(HWND handle) { return PostMessage(handle, WM_CLOSE, 0, 0) != 0; }
 
 auto query_desktop_manager() {
 	const CLSID CLSID_ImmersiveShell = {

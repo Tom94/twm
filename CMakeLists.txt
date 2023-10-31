@@ -134,6 +134,8 @@ set(
 # set(TWM_SOURCES ${TWM_SOURCES} resources/icon.rc)
 # set(TWM_SOURCES ${TWM_SOURCES} resources/twm.manifest)
 
+set(TWM_LIBS dwmapi)
+
 add_executable(twm ${TWM_SOURCES})
 target_link_libraries(twm PUBLIC ${TWM_LIBS})
 target_include_directories(twm PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

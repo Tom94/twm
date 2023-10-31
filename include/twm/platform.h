@@ -14,8 +14,20 @@ namespace twm {
 int last_error_code();
 std::string error_string(int code);
 std::string last_error_string();
-Rect get_window_rect(HWND handle);
+
+// On Windows, the size of a window can be expressed in
+// multiple ways: either as a "rect" or as an "(extended)
+// frame bound". The frame bound refers to what a user would
+// think of the size of the window, whereas the rect also
+// includes shadows and stylistic elements (i.e. tends to
+// be a bit larger). In most situations, it is therefore
+// recommended to use the *_window_frame_bounds functions
+// and not the *_window_rect functions.
 void set_window_rect(HWND handle, const Rect& r);
+Rect get_window_rect(HWND handle);
+void set_window_frame_bounds(HWND handle, const Rect& r);
+Rect get_window_frame_bounds(HWND handle);
+
 std::string get_window_text(HWND handle);
 bool terminate_process(HWND handle);
 bool close_window(HWND handle);

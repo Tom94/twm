@@ -40,7 +40,7 @@ class Window {
 	bool m_marked_for_deletion = false;
 
 	Window(HWND handle, const GUID& desktop_id) :
-		m_name{get_window_text(handle)}, m_rect{get_window_rect(handle)}, m_handle{handle}, m_desktop_id{desktop_id} {}
+		m_name{get_window_text(handle)}, m_rect{get_window_frame_bounds(handle)}, m_handle{handle}, m_desktop_id{desktop_id} {}
 
 	// Returns true if the name changed
 	bool update(const Window& other) {
@@ -84,7 +84,7 @@ public:
 	const string& name() const { return m_name; }
 	const Rect& rect() const { return m_rect; }
 	void set_rect(const Rect& r) {
-		set_window_rect(m_handle, r);
+		set_window_frame_bounds(m_handle, r);
 		m_rect = r;
 	}
 

@@ -63,9 +63,16 @@ struct Rect {
 	Vec2 bottom_right = {};
 
 	Rect() = default;
+	Rect(const Vec2& top_left, const Vec2& bottom_right) : top_left{top_left}, bottom_right{bottom_right} {}
 	Rect(const RECT& r) :
 		top_left{static_cast<float>(r.left), static_cast<float>(r.top)},
 		bottom_right{static_cast<float>(r.right), static_cast<float>(r.bottom)} {}
+
+	Rect& operator-=(const Rect& other) { return *this = *this - other; }
+	Rect& operator+=(const Rect& other) { return *this = *this + other; }
+
+	Rect operator-(const Rect& other) const { return {top_left - other.top_left, bottom_right - other.bottom_right}; }
+	Rect operator+(const Rect& other) const { return {top_left + other.top_left, bottom_right + other.bottom_right}; }
 
 	bool operator==(const Rect& other) const {
 		return top_left == other.top_left && bottom_right == other.bottom_right;
