@@ -73,7 +73,6 @@ auto query_desktop_manager() {
 
 	IServiceProvider* service_provider = NULL;
 
-	CoInitialize(NULL);
 	HRESULT hr = CoCreateInstance(
 		CLSID_ImmersiveShell, NULL, CLSCTX_LOCAL_SERVER, __uuidof(IServiceProvider), (PVOID*)&service_provider
 	);
