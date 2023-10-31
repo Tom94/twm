@@ -79,7 +79,7 @@ struct Rect {
 		auto off_axis = (axis + 1) % 2;
 		auto c = center();
 		auto oc = other.center();
-		return abs(c[axis] - oc[axis]) + fmax(0.0f, abs(c[off_axis] - oc[off_axis]) - size()[off_axis] / 2);
+		return abs(c[axis] - oc[axis]) + 10 * fmax(0.0f, abs(c[off_axis] - oc[off_axis]) - size()[off_axis] / 2);
 	}
 
 	Vec2 center() const { return (top_left + bottom_right) / 2.0f; }
