@@ -52,13 +52,18 @@ Rect get_window_rect(HWND handle) {
 	RECT r;
 
 	if (GetWindowRect(handle, &r) == 0) {
-		throw runtime_error{string{"Could not obtain rect: "} + last_error_string()};
+		throw runtime_error{format("Could not obtain rect: {}", last_error_string())};
 	}
 
 	return {r};
 }
 
 void set_window_frame_bounds(HWND handle, const Rect& r) {
+	// In an ideal world, we would use the Windows API to directly set the
+	// window's frame bounds, but, alas, no such API function exists. As a
+	// workaround, we compute the current margin between the window's rect
+	// and frame bound and use it to derive a rect that corresponds to the
+	// target frame bounds.
 	Rect margin = get_window_rect(handle) - get_window_frame_bounds(handle);
 	return set_window_rect(handle, r + margin);
 }
@@ -66,7 +71,7 @@ void set_window_frame_bounds(HWND handle, const Rect& r) {
 Rect get_window_frame_bounds(HWND handle) {
 	RECT r;
 	if (HRESULT result = DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r)) != S_OK) {
-		throw runtime_error{string{"Could not obtain rect: "} + last_error_string()};
+		throw runtime_error{format("Could not obtain rect: {}", last_error_string())};
 	}
 
 	return {r};
@@ -109,7 +114,7 @@ auto query_desktop_manager() {
 	);
 
 	if (FAILED(hr)) {
-		throw runtime_error{string{"Failed to get immersive shell service provider: "} + to_string(hr)};
+		throw runtime_error{format("Failed to get immersive shell service provider: {}", to_string(hr))};
 	}
 
 	auto guard = ScopeGuard([&]() { service_provider->Release(); });

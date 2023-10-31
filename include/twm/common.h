@@ -4,8 +4,8 @@
 #pragma once
 
 #include <functional>
-#include <stdexcept>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 #define NOMINMAX
@@ -37,11 +37,11 @@ namespace twm {
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
 #define FILE_LINE __FILE__ ":" STR(__LINE__)
-#define TWM_ASSERT(x)                                                          \
-	do {                                                                       \
-		if (!(x)) {                                                            \
-			throw std::runtime_error{std::string{FILE_LINE " " #x " failed"}}; \
-		}                                                                      \
+#define TWM_ASSERT(x)                                             \
+	do {                                                          \
+		if (!(x)) {                                               \
+			throw std::runtime_error{FILE_LINE " " #x " failed"}; \
+		}                                                         \
 	} while (0);
 
 class ScopeGuard {
