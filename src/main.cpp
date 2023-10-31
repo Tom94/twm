@@ -122,6 +122,7 @@ class Desktop {
 		}
 
 		if (is_focused) {
+			it->second.update_focus_time();
 			m_last_focus = handle;
 		}
 
