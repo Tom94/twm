@@ -82,6 +82,10 @@ struct Rect {
 		return top_left != other.top_left || bottom_right != other.bottom_right;
 	}
 
+	Rect with_margin(float amount) {
+		return {top_left - amount, bottom_right + amount};
+	}
+
 	float distance_with_axis_preference(size_t axis, const Rect& other) const {
 		auto off_axis = (axis + 1) % 2;
 		auto c = center();

@@ -71,7 +71,13 @@ void set_window_frame_bounds(HWND handle, const Rect& r) {
 Rect get_window_frame_bounds(HWND handle) {
 	RECT r;
 	if (HRESULT result = DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r)) != S_OK) {
-		throw runtime_error{format("Could not obtain rect: {}", last_error_string())};
+		static bool warned = false;
+		if (!warned) {
+			log_warning("DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS) failed: {}. Falling back to GetWindowRect.");
+			warned = true;
+		}
+
+		return get_window_rect(handle);
 	}
 
 	return {r};
