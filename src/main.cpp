@@ -381,6 +381,12 @@ int main() {
 			}
 		});
 
+		Hotkeys::global().add("ctrl+alt+shift+q", []() {
+			if (auto* w = Window::focused()) {
+				w->terminate();
+			}
+		});
+
 		while (true) {
 			tick(cfg);
 			this_thread::sleep_for(cfg.tick_interval);
