@@ -34,7 +34,7 @@ class Window {
 	string m_name = "";
 	Rect m_rect = {};
 	HWND m_handle = nullptr;
-	clock::time_point m_last_focus_time = {};
+	clock::time_point m_last_interacted_time = {};
 	GUID m_desktop_id = {};
 
 	bool m_marked_for_deletion = false;
@@ -54,7 +54,7 @@ class Window {
 
 	void mark_for_deletion() { m_marked_for_deletion = true; }
 	bool marked_for_deletion() const { return m_marked_for_deletion; }
-	void update_focus_time() { m_last_focus_time = clock::now(); }
+	void update_last_interacted_time() { m_last_interacted_time = clock::now(); }
 
 public:
 	friend class Desktop;
@@ -70,13 +70,13 @@ public:
 	bool focus() {
 		bool success = SetForegroundWindow(m_handle) != 0;
 		if (success) {
-			m_last_focus_time = clock::now();
+			m_last_interacted_time = clock::now();
 		}
 
 		return success;
 	}
 
-	auto last_focus_time() const { return m_last_focus_time; }
+	auto last_focus_time() const { return m_last_interacted_time; }
 
 	bool terminate() const { return terminate_process(m_handle); }
 	bool close() const { return close_window(m_handle); }
@@ -122,7 +122,7 @@ class Desktop {
 		}
 
 		if (is_focused) {
-			it->second.update_focus_time();
+			it->second.update_last_interacted_time();
 			m_last_focus = handle;
 		}
 
@@ -262,7 +262,7 @@ public:
 
 		Window* best_candidate = nullptr;
 		float best_distance = numeric_limits<float>::infinity();
-		clock::time_point most_recent_focus = {};
+		clock::time_point most_recently_interacted = {};
 
 		float center = w->rect().center()[axis];
 
@@ -273,11 +273,11 @@ public:
 				(dir == Direction::Up || dir == Direction::Left);
 
 			bool is_closest_or_equally_close_and_more_recent = dist < best_distance ||
-				(dist == best_distance && ow.last_focus_time() > most_recent_focus);
+				(dist == best_distance && ow.last_focus_time() > most_recently_interacted);
 
 			if (w != &ow && is_on_correct_side && is_closest_or_equally_close_and_more_recent) {
 				best_distance = dist;
-				most_recent_focus = ow.last_focus_time();
+				most_recently_interacted = ow.last_focus_time();
 				best_candidate = &ow;
 			}
 		}
@@ -321,6 +321,9 @@ bool Window::focus_adjacent_or_default(Direction dir) {
 void Window::swap_adjacent(Direction dir) {
 	if (auto* focused = Window::focused()) {
 		if (auto* adj = focused->get_adjacent(dir)) {
+			adj->update_last_interacted_time();
+			focused->update_last_interacted_time();
+
 			Rect tmp = focused->rect();
 			focused->set_rect(adj->rect());
 			adj->set_rect(tmp);
