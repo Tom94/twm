@@ -15,6 +15,7 @@ int last_error_code();
 std::string error_string(int code);
 std::string last_error_string();
 Rect get_window_rect(HWND handle);
+void set_window_rect(HWND handle, const Rect& r);
 std::string get_window_text(HWND handle);
 std::optional<GUID> get_window_desktop_id(HWND handle);
 bool is_window_on_current_desktop(HWND handle);

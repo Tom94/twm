@@ -31,7 +31,7 @@ enum class Direction {
 class Window {
 	string m_name = "";
 	Rect m_rect = {};
-	HWND m_handle = NULL;
+	HWND m_handle = nullptr;
 	GUID m_desktop_id = {};
 	bool m_marked_for_deletion = false;
 
@@ -54,16 +54,22 @@ class Window {
 public:
 	friend class Desktop;
 
-	static const Window* focused();
-	static void focus_adjacent(Direction dir);
-	static const Window* get(HWND handle);
+	static Window* focused();
+	static bool focus_adjacent(Direction dir);
+	static bool focus_adjacent_or_default(Direction dir);
+	static void swap_adjacent(Direction dir);
+	static Window* get(HWND handle);
 
-	const Window* get_adjacent(Direction dir) const;
+	Window* get_adjacent(Direction dir) const;
 
 	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
 
 	const string& name() const { return m_name; }
 	const Rect& rect() const { return m_rect; }
+	void set_rect(const Rect& r) {
+		set_window_rect(m_handle, r);
+		m_rect = r;
+	}
 
 	HWND handle() const { return m_handle; }
 };
@@ -77,15 +83,16 @@ struct BspNode {
 };
 
 class Desktop {
-	unordered_map<HWND, Window> m_windows;
-	unique_ptr<BspNode> m_root;
-	GUID m_id;
+	unordered_map<HWND, Window> m_windows = {};
+	unique_ptr<BspNode> m_root = {};
+	HWND m_last_focus = nullptr;
+	GUID m_id = {};
 
 	bool can_be_managed(const Window& w) {
 		return !w.name().empty() && !IsIconic(w.handle()) && IsWindowVisible(w.handle());
 	}
 
-	bool try_manage(HWND handle) {
+	bool try_manage(HWND handle, bool is_focused) {
 		auto w = Window{handle, m_id};
 
 		if (!can_be_managed(w)) {
@@ -97,17 +104,24 @@ class Desktop {
 			it->second.update(w);
 		}
 
+		if (is_focused) {
+			m_last_focus = handle;
+		}
+
 		return true;
 	}
 
-	void mark_windows_for_deletion() {
+	void pre_update() {
 		for (auto& [_, w] : m_windows) {
 			w.mark_for_deletion();
 		}
 	}
 
-	void delete_marked_windows() {
+	void post_update() {
 		erase_if(m_windows, [](const auto& item) { return item.second.marked_for_deletion(); });
+		if (m_windows.count(m_last_focus) == 0) {
+			m_last_focus = nullptr;
+		}
 	}
 
 	const GUID& id() const { return m_id; }
@@ -134,11 +148,12 @@ public:
 	static void update_all() {
 		current_id() = {};
 		for (auto& [_, d] : all()) {
-			d.mark_windows_for_deletion();
+			d.pre_update();
 		}
 
+		HWND current_focus = GetForegroundWindow();
 		EnumWindows(
-			[](__in HWND handle, __in LPARAM) {
+			[](__in HWND handle, __in LPARAM param) {
 				optional<GUID> opt_desktop_id = get_window_desktop_id(handle);
 				if (!opt_desktop_id.has_value()) {
 					// Window does not seem to belong to any desktop... can't be managed by this app.
@@ -151,7 +166,7 @@ public:
 				// a new desktop object, keep track of it in `desktops`, and use that one.
 				auto insert_result = all().insert({desktop_id, Desktop{desktop_id}});
 				auto& desktop = insert_result.first->second;
-				if (!desktop.try_manage(handle)) {
+				if (!desktop.try_manage(handle, handle == (HWND)param)) {
 					// If the desktop can't manage the window, don't consider it as candidate for current desktop.
 					return TRUE;
 				}
@@ -165,11 +180,11 @@ public:
 
 				return TRUE;
 			},
-			0
+			(LPARAM)current_focus
 		);
 
 		for (auto& [_, d] : all()) {
-			d.delete_marked_windows();
+			d.post_update();
 		}
 
 		erase_if(all(), [](const auto& item) { return item.second.empty(); });
@@ -192,12 +207,33 @@ public:
 		return it != all().end() ? &it->second : nullptr;
 	}
 
-	const Window* get_window(HWND handle) const {
+	HWND last_focus_or_default() {
+		if (m_last_focus) {
+			return m_last_focus;
+		}
+
+		if (!m_windows.empty()) {
+			return m_windows.cbegin()->second.handle();
+		}
+
+		return nullptr;
+	}
+
+	// Returns true if focus changed
+	bool ensure_focus() {
+		if (m_windows.count(GetForegroundWindow()) == 0) {
+			return SetForegroundWindow(last_focus_or_default()) != 0;
+		}
+
+		return false;
+	}
+
+	Window* get_window(HWND handle) {
 		auto it = m_windows.find(handle);
 		return it != m_windows.end() ? &it->second : nullptr;
 	}
 
-	const Window* get_adjacent_window(HWND handle, Direction dir) const {
+	Window* get_adjacent_window(HWND handle, Direction dir) {
 		auto* w = get_window(handle);
 		if (!w) {
 			return nullptr;
@@ -205,7 +241,7 @@ public:
 
 		size_t axis = dir == Direction::Left || dir == Direction::Right ? 0 : 1;
 
-		const Window* best_candidate = nullptr;
+		Window* best_candidate = nullptr;
 		float best_distance = numeric_limits<float>::infinity();
 
 		float center = w->rect().center()[axis];
@@ -233,27 +269,69 @@ public:
 	}
 };
 
-const Window* Window::focused() { return Window::get(GetForegroundWindow()); }
+Window* Window::focused() { return Window::get(GetForegroundWindow()); }
 
-void Window::focus_adjacent(Direction dir) {
+bool Window::focus_adjacent(Direction dir) {
 	if (auto* focused = Window::focused()) {
 		if (auto* adj = focused->get_adjacent(dir)) {
-			adj->focus();
+			return adj->focus();
+		}
+	}
+
+	return false;
+}
+
+bool Window::focus_adjacent_or_default(Direction dir) {
+	if (focus_adjacent(dir)) {
+		return true;
+	}
+
+	if (auto* d = Desktop::current()) {
+		return d->ensure_focus();
+	}
+
+	return false;
+}
+
+void Window::swap_adjacent(Direction dir) {
+	if (auto* focused = Window::focused()) {
+		if (auto* adj = focused->get_adjacent(dir)) {
+			Rect tmp = focused->rect();
+			focused->set_rect(adj->rect());
+			adj->set_rect(tmp);
 		}
 	}
 }
 
-const Window* Window::get(HWND handle) {
+Window* Window::get(HWND handle) {
 	auto* desktop = Desktop::get(handle);
 	return desktop ? desktop->get_window(handle) : nullptr;
 }
 
-const Window* Window::get_adjacent(Direction dir) const {
+Window* Window::get_adjacent(Direction dir) const {
 	auto* desktop = Desktop::get(m_handle);
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
-void tick() {
+using clock = chrono::steady_clock;
+
+struct Config {
+	clock::duration tick_interval = 5ms;
+	clock::duration update_interval = 100ms;
+	bool must_focus = true;
+};
+
+void tick(const Config& cfg) {
+	{
+		static auto last_update = clock::now();
+
+		auto now = clock::now();
+		if (now - last_update > cfg.update_interval) {
+			Desktop::update_all();
+			last_update = now;
+		}
+	}
+
 	MSG msg = {};
 	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
 		switch (msg.message) {
@@ -283,14 +361,21 @@ int main() {
 	SetLastError(0);
 
 	try {
-		Hotkeys::global().add("alt+h", []() { Window::focus_adjacent(Direction::Left); });
-		Hotkeys::global().add("alt+j", []() { Window::focus_adjacent(Direction::Down); });
-		Hotkeys::global().add("alt+k", []() { Window::focus_adjacent(Direction::Up); });
-		Hotkeys::global().add("alt+l", []() { Window::focus_adjacent(Direction::Right); });
+		Config cfg = {};
+
+		Hotkeys::global().add("alt+h", []() { Window::focus_adjacent_or_default(Direction::Left); });
+		Hotkeys::global().add("alt+j", []() { Window::focus_adjacent_or_default(Direction::Down); });
+		Hotkeys::global().add("alt+k", []() { Window::focus_adjacent_or_default(Direction::Up); });
+		Hotkeys::global().add("alt+l", []() { Window::focus_adjacent_or_default(Direction::Right); });
+
+		Hotkeys::global().add("alt+shift+h", []() { Window::swap_adjacent(Direction::Left); });
+		Hotkeys::global().add("alt+shift+j", []() { Window::swap_adjacent(Direction::Down); });
+		Hotkeys::global().add("alt+shift+k", []() { Window::swap_adjacent(Direction::Up); });
+		Hotkeys::global().add("alt+shift+l", []() { Window::swap_adjacent(Direction::Right); });
 
 		while (true) {
-			tick();
-			this_thread::sleep_for(1ms);
+			tick(cfg);
+			this_thread::sleep_for(cfg.tick_interval);
 		}
 	} catch (const runtime_error& e) {
 		log_error(format("Uncaught exception: {}", e.what()));

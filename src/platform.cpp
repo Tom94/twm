@@ -30,6 +30,20 @@ string error_string(int code) {
 
 string last_error_string() { return trim(error_string(last_error_code())); }
 
+void set_window_rect(HWND handle, const Rect& r) {
+	if (SetWindowPos(
+			handle,
+			nullptr,
+			(LONG)r.top_left.x,
+			(LONG)r.top_left.y,
+			(LONG)r.size().x,
+			(LONG)r.size().y,
+			SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER
+		) == 0) {
+		throw runtime_error{format("Could not set rect: {}", last_error_string())};
+	}
+}
+
 Rect get_window_rect(HWND handle) {
 	RECT r;
 	if (GetWindowRect(handle, &r) == 0) {
