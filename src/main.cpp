@@ -21,6 +21,8 @@ using namespace std;
 
 namespace twm {
 
+using clock = chrono::steady_clock;
+
 enum class Direction {
 	Up,
 	Down,
@@ -32,7 +34,9 @@ class Window {
 	string m_name = "";
 	Rect m_rect = {};
 	HWND m_handle = nullptr;
+	clock::time_point m_last_focus_time = {};
 	GUID m_desktop_id = {};
+
 	bool m_marked_for_deletion = false;
 
 	Window(HWND handle, const GUID& desktop_id) :
@@ -50,6 +54,7 @@ class Window {
 
 	void mark_for_deletion() { m_marked_for_deletion = true; }
 	bool marked_for_deletion() const { return m_marked_for_deletion; }
+	void update_focus_time() { m_last_focus_time = clock::now(); }
 
 public:
 	friend class Desktop;
@@ -62,7 +67,17 @@ public:
 
 	Window* get_adjacent(Direction dir) const;
 
-	bool focus() const { return SetForegroundWindow(m_handle) != 0; }
+	bool focus() {
+		bool success = SetForegroundWindow(m_handle) != 0;
+		if (success) {
+			m_last_focus_time = clock::now();
+		}
+
+		return success;
+	}
+
+	auto last_focus_time() const { return m_last_focus_time; }
+
 	bool terminate() const { return terminate_process(m_handle); }
 	bool close() const { return close_window(m_handle); }
 
@@ -209,13 +224,13 @@ public:
 		return it != all().end() ? &it->second : nullptr;
 	}
 
-	HWND last_focus_or_default() {
-		if (m_last_focus) {
-			return m_last_focus;
+	Window* last_focus_or_default() {
+		if (auto it = m_windows.find(m_last_focus); it != m_windows.end()) {
+			return &it->second;
 		}
 
 		if (!m_windows.empty()) {
-			return m_windows.cbegin()->second.handle();
+			return &m_windows.begin()->second;
 		}
 
 		return nullptr;
@@ -223,11 +238,12 @@ public:
 
 	// Returns true if focus changed
 	bool ensure_focus() {
-		if (m_windows.count(GetForegroundWindow()) == 0) {
-			return SetForegroundWindow(last_focus_or_default()) != 0;
+		if (m_windows.count(GetForegroundWindow()) > 0) {
+			return false;
 		}
 
-		return false;
+		auto* w = last_focus_or_default();
+		return w && w->focus();
 	}
 
 	Window* get_window(HWND handle) {
@@ -245,16 +261,22 @@ public:
 
 		Window* best_candidate = nullptr;
 		float best_distance = numeric_limits<float>::infinity();
+		clock::time_point most_recent_focus = {};
 
 		float center = w->rect().center()[axis];
 
 		for (auto& [_, ow] : m_windows) {
 			float dist = w->rect().distance_with_axis_preference(axis, ow.rect());
+
 			bool is_on_correct_side = (center - ow.rect().center()[axis] > 0) ==
 				(dir == Direction::Up || dir == Direction::Left);
 
-			if (w != &ow && is_on_correct_side && dist <= best_distance) {
+			bool is_closest_or_equally_close_and_more_recent = dist < best_distance ||
+				(dist == best_distance && ow.last_focus_time() > most_recent_focus);
+
+			if (w != &ow && is_on_correct_side && is_closest_or_equally_close_and_more_recent) {
 				best_distance = dist;
+				most_recent_focus = ow.last_focus_time();
 				best_candidate = &ow;
 			}
 		}
@@ -314,8 +336,6 @@ Window* Window::get_adjacent(Direction dir) const {
 	auto* desktop = Desktop::get(m_handle);
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
-
-using clock = chrono::steady_clock;
 
 struct Config {
 	clock::duration tick_interval = 5ms;
