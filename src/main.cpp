@@ -316,14 +316,17 @@ public:
 
 		for (auto& [_, ow] : m_windows) {
 			float dist = w->rect().distance_with_axis_preference(axis, ow.rect());
+			float in_axis_dist = center - ow.rect().center()[axis];
 
-			bool is_on_correct_side = (center - ow.rect().center()[axis] > 0) ==
-				(dir == Direction::Up || dir == Direction::Left);
+			float closeness_tolerance = 2;
 
-			bool is_closest_or_equally_close_and_more_recent = dist < best_distance ||
-				(dist == best_distance && ow.last_focus_time() > most_recently_interacted);
+			bool is_on_correct_side = abs(in_axis_dist) > closeness_tolerance &&
+				(in_axis_dist > 0) == (dir == Direction::Up || dir == Direction::Left);
 
-			if (w != &ow && is_on_correct_side && is_closest_or_equally_close_and_more_recent) {
+			bool is_among_closest_or_equally_close_and_more_recent = dist < best_distance - closeness_tolerance ||
+				(abs(dist - best_distance) < closeness_tolerance && ow.last_focus_time() > most_recently_interacted);
+
+			if (w != &ow && is_on_correct_side && is_among_closest_or_equally_close_and_more_recent) {
 				best_distance = dist;
 				most_recently_interacted = ow.last_focus_time();
 				best_candidate = &ow;
