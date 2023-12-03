@@ -28,6 +28,33 @@ Rect get_window_rect(HWND handle);
 bool set_window_frame_bounds(HWND handle, const Rect& r);
 Rect get_window_frame_bounds(HWND handle);
 
+enum class RoundedCornerPreference {
+	Default = 0,
+	Disabled = 1,
+	Enabled = 2,
+};
+
+void set_window_rounded_corners(HWND handle, RoundedCornerPreference rounded);
+
+enum class BorderColor : uint32_t {
+	Black = 0x00000000,
+	DarkGray = 0x00333333,
+	Gray = 0x00666666,
+	LightGray = 0x00999999,
+	White = 0x00FFFFFF,
+	Blue = 0x00ca7a0a,
+	Green = 0x0000FF00,
+	Red = 0x000000FF,
+	Pink = 0x00B4549C,
+	None = 0xFFFFFFFE,
+	Default = 0xFFFFFFFF,
+};
+
+void set_window_border_color(HWND handle, BorderColor color);
+void set_system_dropshadow(bool enabled);
+
+bool focus_window(HWND handle); // returns false if the window could not be focused
+
 std::string get_window_text(HWND handle);
 bool terminate_process(HWND handle);
 bool close_window(HWND handle);

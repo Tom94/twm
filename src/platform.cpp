@@ -89,6 +89,25 @@ Rect get_window_frame_bounds(HWND handle) {
 	return {r};
 }
 
+void set_window_rounded_corners(HWND handle, RoundedCornerPreference rounded) {
+	auto preference = (DWM_WINDOW_CORNER_PREFERENCE)rounded;
+	DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+}
+
+void set_window_border_color(HWND handle, BorderColor color) {
+	DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, &color, sizeof(color));
+}
+
+void set_system_dropshadow(bool enabled) {
+	if (!SystemParametersInfo(SPI_SETDROPSHADOW, 0, (PVOID)enabled, SPIF_SENDCHANGE)) {
+		log_warning("Could not set dropshadow: {}", last_error_string());
+	}
+}
+
+bool focus_window(HWND handle) {
+	return SetForegroundWindow(handle) != 0;
+}
+
 string get_window_text(HWND handle) {
 	int name_length = GetWindowTextLengthW(handle);
 	if (name_length <= 0 || last_error_code() != 0) {

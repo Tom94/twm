@@ -7,9 +7,7 @@
 #include <twm/math.h>
 #include <twm/platform.h>
 
-#include <algorithm>
 #include <chrono>
-#include <functional>
 #include <optional>
 #include <string>
 #include <thread>
@@ -55,8 +53,12 @@ class Window {
 		m_handle{handle},
 		m_desktop_id{desktop_id} {}
 
-	// Returns true if the name changed
+	// Returns true if the name changed. Also apply global style
+	// settings to the window.
 	bool update(const Window& other) {
+		update_border_color(focused() == this);
+		set_window_rounded_corners(m_handle, RoundedCornerPreference::Disabled);
+
 		string old_name = m_name;
 		Rect old_rect = m_rect;
 		m_name = other.m_name;
@@ -82,12 +84,26 @@ public:
 	Window* get_adjacent(Direction dir) const;
 
 	bool focus() {
-		bool success = SetForegroundWindow(m_handle) != 0;
-		if (success) {
-			m_last_interacted_time = clock::now();
+		Window* prev_focused = focused();
+		if (!focus_window(m_handle)) {
+			return false;
 		}
 
-		return success;
+		if (prev_focused) {
+			prev_focused->update_border_color(false);
+		}
+
+		update_border_color(true);
+
+		m_last_interacted_time = clock::now();
+		return true;
+	}
+
+	void set_border_color(BorderColor color) { set_window_border_color(m_handle, color); }
+	void set_rounded_corners(RoundedCornerPreference rounded) { set_window_rounded_corners(m_handle, rounded); }
+
+	void update_border_color(bool is_focused) {
+		set_border_color(is_focused ? BorderColor::LightGray : BorderColor::DarkGray);
 	}
 
 	auto last_focus_time() const { return m_last_interacted_time; }
@@ -463,6 +479,9 @@ int main() {
 	// Reset the error state of the windows API such that later API calls don't
 	// mistakenly get treated as having errored out.
 	SetLastError(0);
+
+	// Disable drop shadow for windows. This is a personal preference.
+	set_system_dropshadow(false);
 
 	try {
 		Config cfg = {};
