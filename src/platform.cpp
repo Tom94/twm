@@ -52,13 +52,11 @@ bool set_window_rect(HWND handle, const Rect& r) {
 }
 
 Rect get_window_rect(HWND handle) {
-	RECT r;
-
-	if (GetWindowRect(handle, &r) == 0) {
+	if (RECT r; GetWindowRect(handle, &r) == 0) {
 		throw runtime_error{format("Could not obtain rect: {}", last_error_string())};
+	} else {
+		return {r};
 	}
-
-	return {r};
 }
 
 bool set_window_frame_bounds(HWND handle, const Rect& r) {
@@ -72,8 +70,7 @@ bool set_window_frame_bounds(HWND handle, const Rect& r) {
 }
 
 Rect get_window_frame_bounds(HWND handle) {
-	RECT r;
-	if (HRESULT result = DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r)) != S_OK) {
+	if (RECT r; HRESULT result = DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r)) != S_OK) {
 		static bool warned = false;
 		if (!warned) {
 			log_warning(
@@ -84,9 +81,9 @@ Rect get_window_frame_bounds(HWND handle) {
 		}
 
 		return get_window_rect(handle);
+	} else {
+		return {r};
 	}
-
-	return {r};
 }
 
 void set_window_rounded_corners(HWND handle, RoundedCornerPreference rounded) {
@@ -109,26 +106,24 @@ bool focus_window(HWND handle) {
 }
 
 string get_window_text(HWND handle) {
-	int name_length = GetWindowTextLengthW(handle);
-	if (name_length <= 0 || last_error_code() != 0) {
+	if (int name_length = GetWindowTextLengthW(handle) <= 0 || last_error_code() != 0) {
 		SetLastError(0);
 		return "";
+	} else {
+		wstring wname;
+		wname.resize(name_length + 1);
+		GetWindowTextW(handle, wname.data(), (int)wname.size());
+		return utf16_to_utf8(wname);
 	}
-
-	wstring wname;
-	wname.resize(name_length + 1);
-	GetWindowTextW(handle, wname.data(), (int)wname.size());
-	return utf16_to_utf8(wname);
 }
 
 bool terminate_process(HWND handle) {
-	DWORD process_id = 0;
-	if (GetWindowThreadProcessId(handle, &process_id) == 0 || process_id == 0) {
+	if (DWORD process_id = 0; GetWindowThreadProcessId(handle, &process_id) == 0 || process_id == 0) {
 		return false;
+	} else {
+		HANDLE process = OpenProcess(PROCESS_TERMINATE, 0, process_id);
+		return process && TerminateProcess(process, 0) != 0;
 	}
-
-	HANDLE process = OpenProcess(PROCESS_TERMINATE, 0, process_id);
-	return process && TerminateProcess(process, 0) != 0;
 }
 
 bool close_window(HWND handle) { return PostMessage(handle, WM_CLOSE, 0, 0) != 0; }
@@ -167,13 +162,11 @@ IVirtualDesktopManager* desktop_manager() {
 }
 
 optional<GUID> get_window_desktop_id(HWND handle) {
-	GUID desktop_id;
-	HRESULT result = desktop_manager()->GetWindowDesktopId(handle, &desktop_id);
-	if (result != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
+	if (GUID desktop_id; desktop_manager()->GetWindowDesktopId(handle, &desktop_id) != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
 		return {};
+	} else {
+		return desktop_id;
 	}
-
-	return desktop_id;
 }
 
 bool is_window_on_current_desktop(HWND handle) {
@@ -183,11 +176,12 @@ bool is_window_on_current_desktop(HWND handle) {
 }
 
 bool move_window_to_desktop(HWND handle, const GUID& desktop_id) {
-	HRESULT res = desktop_manager()->MoveWindowToDesktop(handle, desktop_id);
-	if (res != S_OK) {
+	if (HRESULT res = desktop_manager()->MoveWindowToDesktop(handle, desktop_id) != S_OK) {
 		log_warning("Failed to move window to desktop: {}", error_string(res));
+		return false;
+	} else {
+		return true;
 	}
-	return res == S_OK;
 }
 
 } // namespace twm
