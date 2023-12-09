@@ -254,7 +254,7 @@ public:
 		// race conditions, conflicts with user-held keys, or changes in the shortcut.
 		// In the future, we should probably use IVirtualDesktopManagerInternal, despite
 		// it being an API that may break at any point...
-		Hotkeys::send_to_system(format("ctrl+win+{}", dir == Direction::Left ? "left" : "right"));
+		Hotkeys::send_to_system(format("ctrl-win-{}", dir == Direction::Left ? "left" : "right"));
 
 		// After switching desktops, re-run a full update to ensure the current desktop
 		// is correctly registered.
@@ -464,26 +464,32 @@ int main() {
 	try {
 		Config cfg = {};
 
-		cfg.hotkeys.add("alt+h", []() { Window::focus_adjacent_or_default(Direction::Left); });
-		cfg.hotkeys.add("alt+j", []() { Window::focus_adjacent_or_default(Direction::Down); });
-		cfg.hotkeys.add("alt+k", []() { Window::focus_adjacent_or_default(Direction::Up); });
-		cfg.hotkeys.add("alt+l", []() { Window::focus_adjacent_or_default(Direction::Right); });
+		cfg.hotkeys.add("alt-h", []() { Window::focus_adjacent_or_default(Direction::Left); });
+		cfg.hotkeys.add("alt-j", []() { Window::focus_adjacent_or_default(Direction::Down); });
+		cfg.hotkeys.add("alt-k", []() { Window::focus_adjacent_or_default(Direction::Up); });
+		cfg.hotkeys.add("alt-l", []() { Window::focus_adjacent_or_default(Direction::Right); });
 
-		cfg.hotkeys.add("alt+shift+h", []() { Window::swap_adjacent(Direction::Left); });
-		cfg.hotkeys.add("alt+shift+j", []() { Window::swap_adjacent(Direction::Down); });
-		cfg.hotkeys.add("alt+shift+k", []() { Window::swap_adjacent(Direction::Up); });
-		cfg.hotkeys.add("alt+shift+l", []() { Window::swap_adjacent(Direction::Right); });
+		cfg.hotkeys.add("alt-shift-h", []() { Window::swap_adjacent(Direction::Left); });
+		cfg.hotkeys.add("alt-shift-j", []() { Window::swap_adjacent(Direction::Down); });
+		cfg.hotkeys.add("alt-shift-k", []() { Window::swap_adjacent(Direction::Up); });
+		cfg.hotkeys.add("alt-shift-l", []() { Window::swap_adjacent(Direction::Right); });
 
-		cfg.hotkeys.add("alt+shift+1", []() { Window::move_to_adjacent_desktop(Direction::Left); });
-		cfg.hotkeys.add("alt+shift+2", []() { Window::move_to_adjacent_desktop(Direction::Right); });
+		cfg.hotkeys.add("alt-1", []() { Desktop::focus_adjacent(Direction::Left); });
+		cfg.hotkeys.add("alt-2", []() { Desktop::focus_adjacent(Direction::Right); });
 
-		cfg.hotkeys.add("alt+shift+q", []() {
+		cfg.hotkeys.add("alt-left", []() { Desktop::focus_adjacent(Direction::Left); });
+		cfg.hotkeys.add("alt-right", []() { Desktop::focus_adjacent(Direction::Right); });
+
+		cfg.hotkeys.add("alt-shift-1", []() { Window::move_to_adjacent_desktop(Direction::Left); });
+		cfg.hotkeys.add("alt-shift-2", []() { Window::move_to_adjacent_desktop(Direction::Right); });
+
+		cfg.hotkeys.add("alt-shift-q", []() {
 			if (auto* w = Window::focused()) {
 				w->close();
 			}
 		});
 
-		cfg.hotkeys.add("ctrl+alt+shift+q", []() {
+		cfg.hotkeys.add("ctrl-alt-shift-q", []() {
 			if (auto* w = Window::focused()) {
 				w->terminate();
 			}

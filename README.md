@@ -11,13 +11,13 @@ Why is this so hard!?
 No more!
 With **twm**, you can move focus by pressing direction keys.
 Duh!
-`alt+right` to move focus to the right.
-`alt+left` to go to the left.
+`alt-right` to move focus to the right.
+`alt-left` to go to the left.
 Impossible to get wrong.
 Vim shortcuts?
-`alt+h/j/k/l` also work.
+`alt-h/j/k/l` also work.
 
-You can also swap adjacent windows with `alt+shift+<dir key>`.
+You can also swap adjacent windows with `alt-shift-<dir key>`.
 
 Optional config:
 TODO: write

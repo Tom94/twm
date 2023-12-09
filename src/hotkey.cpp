@@ -48,7 +48,7 @@ unordered_map<string, UINT> string_to_keycode = {
 
 vector<INPUT> keys_to_inputs(const string& keycombo, SendMode mode) {
 	vector<INPUT> inputs;
-	for (const auto& part : split(keycombo, "+")) {
+	for (const auto& part : split(keycombo, "-")) {
 		auto name = to_lower(trim(part));
 
 		INPUT in = {};
@@ -115,7 +115,7 @@ vector<INPUT> mods_to_inputs(UINT mods, SendMode mode) {
 		mod_names.emplace_back("shift");
 	}
 
-	return keys_to_inputs(join(mod_names, "+"), mode);
+	return keys_to_inputs(join(mod_names, "-"), mode);
 }
 
 void Hotkeys::send_to_system(const string& keycombo, SendMode mode) {
@@ -137,11 +137,11 @@ void Hotkeys::send_to_system(const string& keycombo, SendMode mode) {
 
 void Hotkeys::add(const string& keycombo, Callback cb) {
 	int id = (int)m_hotkeys.size();
-	auto parts = split(keycombo, "+");
+	auto parts = split(keycombo, "-");
 	UINT mod = 0;
 	UINT keycode = 0;
 
-	// keycombo is of the form mod1+mod2+...+keycode
+	// keycombo is of the form mod1-mod2-...-keycode
 	// case insensitive and with optional spaces. Parse below.
 	for (const auto& part : parts) {
 		auto name = to_lower(trim(part));
