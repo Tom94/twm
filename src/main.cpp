@@ -419,6 +419,124 @@ Window* Window::get_adjacent(Direction dir) const {
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
+enum class Action {
+	Focus,
+	Swap,
+	MoveToDesktop,
+	Close,
+	Terminate,
+};
+
+Action to_action(string_view str) {
+	auto lstr = to_lower(str);
+	if (lstr == "focus") {
+		return Action::Focus;
+	} else if (lstr == "swap") {
+		return Action::Swap;
+	} else if (lstr == "move_to_desktop") {
+		return Action::MoveToDesktop;
+	} else if (lstr == "close") {
+		return Action::Close;
+	} else if (lstr == "terminate") {
+		return Action::Terminate;
+	}
+
+	throw runtime_error{format("Invalid action: {}", str)};
+}
+
+enum class Target {
+	Window,
+	Desktop,
+};
+
+Target to_target(string_view str) {
+	auto lstr = to_lower(str);
+	if (lstr == "window") {
+		return Target::Window;
+	} else if (lstr == "desktop") {
+		return Target::Desktop;
+	}
+
+	throw runtime_error{format("Invalid target: {}", str)};
+}
+
+void invoke_action(string_view action) {
+	auto parts = split(action, " ");
+	if (parts.size() < 1) {
+		throw runtime_error{"Invalid action"};
+	}
+
+	auto action_type = to_action(parts[0]);
+	switch (action_type) {
+		case Action::Focus: {
+			if (parts.size() != 3) {
+				throw runtime_error{"Invalid focus action"};
+			}
+
+			auto target = to_target(parts[1]);
+			auto dir = to_direction(parts[2]);
+			switch (target) {
+				case Target::Window: Window::focus_adjacent_or_default(dir); break;
+				case Target::Desktop: Desktop::focus_adjacent(dir); break;
+			}
+		} break;
+		case Action::Swap: {
+			if (parts.size() != 3) {
+				throw runtime_error{"Invalid swap action"};
+			}
+
+			auto target = to_target(parts[1]);
+			auto dir = to_direction(parts[2]);
+			switch (target) {
+				case Target::Window: Window::swap_adjacent(dir); break;
+				case Target::Desktop: throw runtime_error{"Cannot swap desktops"}; break;
+			}
+		} break;
+		case Action::MoveToDesktop: {
+			if (parts.size() != 3) {
+				throw runtime_error{"Invalid move action"};
+			}
+
+			auto target = to_target(parts[1]);
+			auto dir = to_direction(parts[2]);
+			switch (target) {
+				case Target::Window: Window::move_to_adjacent_desktop(dir); break;
+				case Target::Desktop: throw runtime_error{"Cannot move desktops"}; break;
+			}
+		} break;
+		case Action::Close: {
+			if (parts.size() != 2) {
+				throw runtime_error{"Invalid close action"};
+			}
+
+			auto target = to_target(parts[1]);
+			switch (target) {
+				case Target::Window: {
+					if (auto* w = Window::focused()) {
+						w->close();
+					}
+				} break;
+				case Target::Desktop: throw runtime_error{"Cannot close desktops"}; break;
+			}
+		} break;
+		case Action::Terminate: {
+			if (parts.size() != 2) {
+				throw runtime_error{"Invalid terminate action"};
+			}
+
+			auto target = to_target(parts[1]);
+			switch (target) {
+				case Target::Window: {
+					if (auto* w = Window::focused()) {
+						w->terminate();
+					}
+				} break;
+				case Target::Desktop: throw runtime_error{"Cannot terminate desktops"}; break;
+			}
+		} break;
+	}
+}
+
 void tick(const Config& cfg) {
 	{
 		static auto last_update = clock::now();
@@ -437,7 +555,7 @@ void tick(const Config& cfg) {
 				// Ensure our information about desktops and their contained windows is as up-to-date as
 				// possible before triggering a hotkey to minimize potential for erroneous behavior.
 				Desktop::update_all();
-				cfg.hotkeys.trigger((int)msg.wParam);
+				invoke_action(cfg.hotkeys.action_of((int)msg.wParam));
 			} break;
 			default: {
 				log_warning(format("Unknown message: {}", msg.message));
@@ -464,36 +582,30 @@ int main() {
 	try {
 		Config cfg = {};
 
-		cfg.hotkeys.add("alt-h", []() { Window::focus_adjacent_or_default(Direction::Left); });
-		cfg.hotkeys.add("alt-j", []() { Window::focus_adjacent_or_default(Direction::Down); });
-		cfg.hotkeys.add("alt-k", []() { Window::focus_adjacent_or_default(Direction::Up); });
-		cfg.hotkeys.add("alt-l", []() { Window::focus_adjacent_or_default(Direction::Right); });
+		cfg.load_from_string(R"(
+[hotkeys]
+alt-h = "focus window left"
+alt-j = "focus window down"
+alt-k = "focus window up"
+alt-l = "focus window right"
 
-		cfg.hotkeys.add("alt-shift-h", []() { Window::swap_adjacent(Direction::Left); });
-		cfg.hotkeys.add("alt-shift-j", []() { Window::swap_adjacent(Direction::Down); });
-		cfg.hotkeys.add("alt-shift-k", []() { Window::swap_adjacent(Direction::Up); });
-		cfg.hotkeys.add("alt-shift-l", []() { Window::swap_adjacent(Direction::Right); });
+alt-shift-h = "swap window left"
+alt-shift-j = "swap window down"
+alt-shift-k = "swap window up"
+alt-shift-l = "swap window right"
 
-		cfg.hotkeys.add("alt-1", []() { Desktop::focus_adjacent(Direction::Left); });
-		cfg.hotkeys.add("alt-2", []() { Desktop::focus_adjacent(Direction::Right); });
+alt-1 = "focus desktop left"
+alt-2 = "focus desktop right"
 
-		cfg.hotkeys.add("alt-left", []() { Desktop::focus_adjacent(Direction::Left); });
-		cfg.hotkeys.add("alt-right", []() { Desktop::focus_adjacent(Direction::Right); });
+alt-left = "focus desktop left"
+alt-right = "focus desktop right"
 
-		cfg.hotkeys.add("alt-shift-1", []() { Window::move_to_adjacent_desktop(Direction::Left); });
-		cfg.hotkeys.add("alt-shift-2", []() { Window::move_to_adjacent_desktop(Direction::Right); });
+alt-shift-1 = "move_to_desktop window left"
+alt-shift-2 = "move_to_desktop window right"
 
-		cfg.hotkeys.add("alt-shift-q", []() {
-			if (auto* w = Window::focused()) {
-				w->close();
-			}
-		});
-
-		cfg.hotkeys.add("ctrl-alt-shift-q", []() {
-			if (auto* w = Window::focused()) {
-				w->terminate();
-			}
-		});
+alt-shift-q = "close window"
+ctrl-alt-shift-q = "terminate window"
+		)");
 
 		while (true) {
 			tick(cfg);

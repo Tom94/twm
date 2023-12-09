@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <twm/common.h>
 #include <twm/hotkey.h>
 
 #include <chrono>
@@ -16,7 +17,8 @@ struct Config {
 	bool must_focus = true;
 	Hotkeys hotkeys;
 
-	void load(const std::filesystem::path& path);
+	void load_from_file(const std::filesystem::path& path);
+	void load_from_string(std::string_view path);
 
 	clock::duration tick_interval() const { return std::chrono::duration_cast<clock::duration>(std::chrono::duration<float>(tick_interval_seconds)); }
 	clock::duration update_interval() const { return std::chrono::duration_cast<clock::duration>(std::chrono::duration<float>(update_interval_seconds)); }

@@ -1,0 +1,6 @@
+[submodule "dependencies/tomlplusplus"]
+	path = dependencies/tomlplusplus
+	url = https://github.com/marzer/tomlplusplus
+[submodule "dependencies/tinylogger"]
+	path = dependencies/tinylogger
+	url = https://github.com/tom94/tinylogger

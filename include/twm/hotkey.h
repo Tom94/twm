@@ -3,13 +3,10 @@
 
 #pragma once
 
-#include <functional>
 #include <string>
 #include <vector>
 
 namespace twm {
-
-using Callback = std::function<void()>;
 
 enum class SendMode {
 	PressAndRelease,
@@ -19,7 +16,7 @@ enum class SendMode {
 
 struct Hotkey {
 	int id;
-	std::function<void()> cb;
+	std::string action;
 	std::string keycombo;
 };
 
@@ -34,8 +31,8 @@ public:
 	// by the Windows API (e.g. for switching virtual desktops).
 	static void send_to_system(const std::string& keycombo, SendMode mode = SendMode::PressAndRelease);
 
-	void add(const std::string& keycombo, Callback cb);
-	void trigger(int id) const;
+	void add(std::string_view keycombo, std::string_view action);
+	std::string_view action_of(int id) const;
 	void clear();
 };
 

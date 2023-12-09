@@ -31,9 +31,10 @@ wstring utf8_to_utf16(const string& utf8) {
 	return utf16;
 }
 
-string to_lower(string str) {
-	transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)tolower(c); });
-	return str;
+string to_lower(string_view str) {
+	std::string result{str};
+	transform(begin(result), end(result), begin(result), [](unsigned char c) { return (char)tolower(c); });
+	return result;
 }
 
 string ltrim(string s) {
@@ -48,7 +49,7 @@ string rtrim(string s) {
 
 string trim(string s) { return ltrim(rtrim(s)); }
 
-vector<string> split(string text, const string& delim) {
+vector<string> split(string_view text, const string& delim) {
 	vector<string> result;
 	size_t begin = 0;
 	while (true) {
@@ -85,7 +86,7 @@ std::string to_string(Direction dir) {
 	}
 }
 
-Direction from_string(const std::string& str) {
+Direction to_direction(const std::string& str) {
 	std::string lstr = to_lower(str);
 	if (lstr == "up") {
 		return Direction::Up;
@@ -95,9 +96,9 @@ Direction from_string(const std::string& str) {
 		return Direction::Left;
 	} else if (lstr == "right") {
 		return Direction::Right;
-	} else {
-		throw runtime_error{format("from_string: invalid dir", str)};
 	}
+
+	throw runtime_error{format("to_direction: invalid dir", str)};
 }
 
 } // namespace twm

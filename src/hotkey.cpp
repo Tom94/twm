@@ -135,7 +135,7 @@ void Hotkeys::send_to_system(const string& keycombo, SendMode mode) {
 	}
 }
 
-void Hotkeys::add(const string& keycombo, Callback cb) {
+void Hotkeys::add(string_view keycombo, string_view action) {
 	int id = (int)m_hotkeys.size();
 	auto parts = split(keycombo, "-");
 	UINT mod = 0;
@@ -173,16 +173,16 @@ void Hotkeys::add(const string& keycombo, Callback cb) {
 		throw runtime_error{format("Error registering {}: {}", keycombo, last_error_string())};
 	}
 
-	m_hotkeys.emplace_back(id, cb, keycombo);
+	m_hotkeys.emplace_back(id, string{action}, string{keycombo});
 }
 
-void Hotkeys::trigger(int id) const {
+string_view Hotkeys::action_of(int id) const {
 	if (id < 0 || id >= (int)m_hotkeys.size()) {
 		throw runtime_error{"Invalid hotkey id"};
 	}
 
 	const Hotkey& hk = m_hotkeys[id];
-	hk.cb();
+	return hk.action;
 }
 
 void Hotkeys::clear() {

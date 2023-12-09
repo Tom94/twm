@@ -73,12 +73,12 @@ private:
 
 std::string utf16_to_utf8(const std::wstring& utf16);
 std::wstring utf8_to_utf16(const std::string& utf8);
-std::string to_lower(std::string str);
+std::string to_lower(std::string_view str);
 std::string ltrim(std::string s);
 std::string rtrim(std::string s);
 std::string trim(std::string s);
 
-std::vector<std::string> split(std::string text, const std::string& delim);
+std::vector<std::string> split(std::string_view text, const std::string& delim);
 
 template <typename T> std::string join(const T& components, const std::string& delim) {
 	std::ostringstream s;
@@ -102,6 +102,6 @@ enum class Direction {
 
 Direction opposite(Direction dir);
 std::string to_string(Direction dir);
-Direction from_string(const std::string& str);
+Direction to_direction(const std::string& str);
 
 } // namespace twm
