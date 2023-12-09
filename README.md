@@ -1,4 +1,4 @@
-# dir-focus — Directional focus switcher for Windows
+# twm — Directional focus switcher for Windows
 
 You've perfectly arranged your windows.
 Code in the middle, terminal to your left, browser to your right.
@@ -9,13 +9,13 @@ Dammit, wrong window again.
 Why is this so hard!?
 
 No more!
-With **dir-focus**, you can move focus by pressing direction keys.
+With **twm**, you can move focus by pressing direction keys.
 Duh!
 `alt+right` to move focus to the right.
 `alt+left` to go to the left.
 Impossible to get wrong.
 Vim shortcuts?
-`alt+h/j/k/l`.
+`alt+h/j/k/l` also work.
 
 You can also swap adjacent windows with `alt+shift+<dir key>`.
 
