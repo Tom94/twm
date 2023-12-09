@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 
 #define NOMINMAX
@@ -33,6 +33,8 @@ template <> struct equal_to<GUID> {
 } // namespace std
 
 namespace twm {
+
+using clock = std::chrono::steady_clock;
 
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
@@ -90,5 +92,16 @@ template <typename T> std::string join(const T& components, const std::string& d
 
 	return s.str();
 }
+
+enum class Direction {
+	Up,
+	Down,
+	Left,
+	Right,
+};
+
+Direction opposite(Direction dir);
+std::string to_string(Direction dir);
+Direction from_string(const std::string& str);
 
 } // namespace twm

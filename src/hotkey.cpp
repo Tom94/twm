@@ -118,7 +118,7 @@ vector<INPUT> mods_to_inputs(UINT mods, SendMode mode) {
 	return keys_to_inputs(join(mod_names, "+"), mode);
 }
 
-void Hotkeys::send(const string& keycombo, SendMode mode) {
+void Hotkeys::send_to_system(const string& keycombo, SendMode mode) {
 	// Since the hotkey might invoke other system-wide hotkeys underneath,
 	// e.g. to access functionality that is not exposed by the Windows API
 	// such as virtual desktop switching, let us temporarily let go of any

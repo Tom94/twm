@@ -2,6 +2,7 @@
 // It is published under the GPU GPLv3 license; see LICENSE.txt for details.
 
 #include <twm/common.h>
+#include <twm/config.h>
 #include <twm/hotkey.h>
 #include <twm/logging.h>
 #include <twm/math.h>
@@ -20,23 +21,6 @@ using namespace std;
 namespace twm {
 
 using clock = chrono::steady_clock;
-
-enum class Direction {
-	Up,
-	Down,
-	Left,
-	Right,
-};
-
-Direction opposite(Direction dir) {
-	switch (dir) {
-		case Direction::Up: return Direction::Down;
-		case Direction::Down: return Direction::Up;
-		case Direction::Right: return Direction::Left;
-		case Direction::Left: return Direction::Right;
-		default: throw runtime_error{"opposite: invalid dir"};
-	}
-}
 
 class Window {
 	string m_name = "";
@@ -270,7 +254,7 @@ public:
 		// race conditions, conflicts with user-held keys, or changes in the shortcut.
 		// In the future, we should probably use IVirtualDesktopManagerInternal, despite
 		// it being an API that may break at any point...
-		Hotkeys::send(format("ctrl+win+{}", dir == Direction::Left ? "left" : "right"));
+		Hotkeys::send_to_system(format("ctrl+win+{}", dir == Direction::Left ? "left" : "right"));
 
 		// After switching desktops, re-run a full update to ensure the current desktop
 		// is correctly registered.
@@ -435,18 +419,12 @@ Window* Window::get_adjacent(Direction dir) const {
 	return desktop ? desktop->get_adjacent_window(m_handle, dir) : nullptr;
 }
 
-struct Config {
-	clock::duration tick_interval = 5ms;
-	clock::duration update_interval = 100ms;
-	bool must_focus = true;
-};
-
 void tick(const Config& cfg) {
 	{
 		static auto last_update = clock::now();
 
 		auto now = clock::now();
-		if (now - last_update > cfg.update_interval) {
+		if (now - last_update > cfg.update_interval()) {
 			Desktop::update_all();
 			last_update = now;
 		}
@@ -459,7 +437,7 @@ void tick(const Config& cfg) {
 				// Ensure our information about desktops and their contained windows is as up-to-date as
 				// possible before triggering a hotkey to minimize potential for erroneous behavior.
 				Desktop::update_all();
-				Hotkeys::global().trigger((int)msg.wParam);
+				cfg.hotkeys.trigger((int)msg.wParam);
 			} break;
 			default: {
 				log_warning(format("Unknown message: {}", msg.message));
@@ -486,26 +464,26 @@ int main() {
 	try {
 		Config cfg = {};
 
-		Hotkeys::global().add("alt+h", []() { Window::focus_adjacent_or_default(Direction::Left); });
-		Hotkeys::global().add("alt+j", []() { Window::focus_adjacent_or_default(Direction::Down); });
-		Hotkeys::global().add("alt+k", []() { Window::focus_adjacent_or_default(Direction::Up); });
-		Hotkeys::global().add("alt+l", []() { Window::focus_adjacent_or_default(Direction::Right); });
+		cfg.hotkeys.add("alt+h", []() { Window::focus_adjacent_or_default(Direction::Left); });
+		cfg.hotkeys.add("alt+j", []() { Window::focus_adjacent_or_default(Direction::Down); });
+		cfg.hotkeys.add("alt+k", []() { Window::focus_adjacent_or_default(Direction::Up); });
+		cfg.hotkeys.add("alt+l", []() { Window::focus_adjacent_or_default(Direction::Right); });
 
-		Hotkeys::global().add("alt+shift+h", []() { Window::swap_adjacent(Direction::Left); });
-		Hotkeys::global().add("alt+shift+j", []() { Window::swap_adjacent(Direction::Down); });
-		Hotkeys::global().add("alt+shift+k", []() { Window::swap_adjacent(Direction::Up); });
-		Hotkeys::global().add("alt+shift+l", []() { Window::swap_adjacent(Direction::Right); });
+		cfg.hotkeys.add("alt+shift+h", []() { Window::swap_adjacent(Direction::Left); });
+		cfg.hotkeys.add("alt+shift+j", []() { Window::swap_adjacent(Direction::Down); });
+		cfg.hotkeys.add("alt+shift+k", []() { Window::swap_adjacent(Direction::Up); });
+		cfg.hotkeys.add("alt+shift+l", []() { Window::swap_adjacent(Direction::Right); });
 
-		Hotkeys::global().add("alt+shift+1", []() { Window::move_to_adjacent_desktop(Direction::Left); });
-		Hotkeys::global().add("alt+shift+2", []() { Window::move_to_adjacent_desktop(Direction::Right); });
+		cfg.hotkeys.add("alt+shift+1", []() { Window::move_to_adjacent_desktop(Direction::Left); });
+		cfg.hotkeys.add("alt+shift+2", []() { Window::move_to_adjacent_desktop(Direction::Right); });
 
-		Hotkeys::global().add("alt+shift+q", []() {
+		cfg.hotkeys.add("alt+shift+q", []() {
 			if (auto* w = Window::focused()) {
 				w->close();
 			}
 		});
 
-		Hotkeys::global().add("ctrl+alt+shift+q", []() {
+		cfg.hotkeys.add("ctrl+alt+shift+q", []() {
 			if (auto* w = Window::focused()) {
 				w->terminate();
 			}
@@ -513,7 +491,7 @@ int main() {
 
 		while (true) {
 			tick(cfg);
-			this_thread::sleep_for(cfg.tick_interval);
+			this_thread::sleep_for(cfg.tick_interval());
 		}
 	} catch (const runtime_error& e) {
 		log_error(format("Uncaught exception: {}", e.what()));

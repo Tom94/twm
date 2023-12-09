@@ -140,7 +140,7 @@ auto query_desktop_manager() {
 	);
 
 	if (FAILED(hr)) {
-		throw runtime_error{format("Failed to get immersive shell service provider: {}", to_string(hr))};
+		throw runtime_error{format("Failed to get immersive shell service provider: {}", std::to_string(hr))};
 	}
 
 	auto guard = ScopeGuard([&]() { service_provider->Release(); });

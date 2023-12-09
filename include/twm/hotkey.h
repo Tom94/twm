@@ -26,20 +26,13 @@ struct Hotkey {
 class Hotkeys {
 	std::vector<Hotkey> m_hotkeys;
 
-	Hotkeys() {}
-
 public:
 	~Hotkeys() { clear(); }
 
 	// Sends the given keycombo to the system. Useful to trigger
 	// system-wide shortcuts for functionality that is not exposed
 	// by the Windows API (e.g. for switching virtual desktops).
-	static void send(const std::string& keycombo, SendMode mode = SendMode::PressAndRelease);
-
-	static auto& global() {
-		static Hotkeys hotkeys;
-		return hotkeys;
-	}
+	static void send_to_system(const std::string& keycombo, SendMode mode = SendMode::PressAndRelease);
 
 	void add(const std::string& keycombo, Callback cb);
 	void trigger(int id) const;

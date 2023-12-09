@@ -4,6 +4,7 @@
 #include <twm/common.h>
 
 #include <algorithm>
+#include <format>
 
 using namespace std;
 
@@ -62,6 +63,41 @@ vector<string> split(string text, const string& delim) {
 	}
 
 	return result;
+}
+
+Direction opposite(Direction dir) {
+	switch (dir) {
+		case Direction::Up: return Direction::Down;
+		case Direction::Down: return Direction::Up;
+		case Direction::Left: return Direction::Right;
+		case Direction::Right: return Direction::Left;
+		default: throw runtime_error{"opposite: invalid dir"};
+	}
+}
+
+std::string to_string(Direction dir) {
+	switch (dir) {
+		case Direction::Up: return "up";
+		case Direction::Down: return "down";
+		case Direction::Left: return "left";
+		case Direction::Right: return "right";
+		default: throw runtime_error{"to_string: invalid dir"};
+	}
+}
+
+Direction from_string(const std::string& str) {
+	std::string lstr = to_lower(str);
+	if (lstr == "up") {
+		return Direction::Up;
+	} else if (lstr == "down") {
+		return Direction::Down;
+	} else if (lstr == "left") {
+		return Direction::Left;
+	} else if (lstr == "right") {
+		return Direction::Right;
+	} else {
+		throw runtime_error{format("from_string: invalid dir", str)};
+	}
 }
 
 } // namespace twm
