@@ -139,7 +139,7 @@ add_executable(twm ${TWM_SOURCES})
 target_link_libraries(twm PUBLIC ${TWM_LIBS})
 target_include_directories(twm PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinylogger"
 	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tomlplusplus/include"
 )
 

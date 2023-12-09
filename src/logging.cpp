@@ -3,8 +3,8 @@
 
 #include <twm/logging.h>
 
-#include <format>
-#include <iostream>
+#include <tinylogger/tinylogger.h>
+
 #include <string>
 
 using namespace std;
@@ -19,10 +19,10 @@ void log(Severity severity, const string& str) {
 	}
 
 	switch (severity) {
-		case Severity::Debug: cout << format("DEBUG: {}\n", str); break;
-		case Severity::Info: cout << format("INFO: {}\n", str); break;
-		case Severity::Warning: cerr << format("WARNING: {}\n", str); break;
-		case Severity::Error: cerr << format("ERROR: {}\n", str); break;
+		case Severity::Debug: tlog::debug() << str; break;
+		case Severity::Info: tlog::info() << str; break;
+		case Severity::Warning: tlog::warning() << str; break;
+		case Severity::Error: tlog::error() << str; break;
 	}
 }
 
