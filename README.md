@@ -21,7 +21,7 @@ You can also swap adjacent windows with `alt-shift-<dir key>`.
 
 ## Configuration
 
-**twm** can be configured by a [TOML file](https://toml.io/en/) `%APPDATA%\twm\twm.toml`.
+**twm** is configured by a [TOML file](https://toml.io/en/) `%APPDATA%\twm\twm.toml`.
 If you want **twm** to load another file, set the `TWM_CONFIG_PATH` environment variable to its path.
 
 If no config file exists, **twm** uses the (self-explanatory) default configuration:
@@ -75,9 +75,11 @@ draw_focus_border = true
 ## Tiling window manager
 
 You might have guessed that **twm** stands for **t**iling **w**indow **m**anager... and that would be correct!
-I plan to add BSP (binary space partitioning) tiling in the future.
-Until then, I recommend using [FancyZones](https://learn.microsoft.com/en-us/windows/powertoys/fancyzones), part of [PowerToys](https://learn.microsoft.com/en-us/windows/powertoys/), to tile your windows.
-I am a happy user myself.
+I plan to add BSP-tree (binary space partitioning) tiling in the future.
+Until then, I recommend using [FancyZones](https://learn.microsoft.com/en-us/windows/powertoys/fancyzones) (part of [PowerToys](https://learn.microsoft.com/en-us/windows/powertoys/)) to tile your windows.
+
+Alternatively, check out [komorebi](https://github.com/LGUG2Z/komorebi), an almost fully fledged tiling window manager for Windows.
+(I say "almost" because [there is no tree-based tiling](https://github.com/LGUG2Z/komorebi/issues/59) like you might be used to from [i3](https://i3wm.org/) or [yabai](https://github.com/koekeishiya/yabai).)
 
 ## License
 

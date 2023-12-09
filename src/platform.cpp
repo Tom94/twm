@@ -101,9 +101,7 @@ void set_system_dropshadow(bool enabled) {
 	}
 }
 
-bool focus_window(HWND handle) {
-	return SetForegroundWindow(handle) != 0;
-}
+bool focus_window(HWND handle) { return SetForegroundWindow(handle) != 0; }
 
 string get_window_text(HWND handle) {
 	if (int name_length = GetWindowTextLengthW(handle) <= 0 || last_error_code() != 0) {
@@ -130,13 +128,20 @@ bool close_window(HWND handle) { return PostMessage(handle, WM_CLOSE, 0, 0) != 0
 
 auto query_desktop_manager() {
 	const CLSID CLSID_ImmersiveShell = {
-		0xC2F03A33, 0x21F5, 0x47FA, {0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}
-    };
+		0xC2F03A33,
+		0x21F5,
+		0x47FA,
+		{0xB4, 0xBB, 0x15, 0x63, 0x62, 0xA2, 0xF2, 0x39}
+	};
 
 	IServiceProvider* service_provider = NULL;
 
 	HRESULT hr = CoCreateInstance(
-		CLSID_ImmersiveShell, NULL, CLSCTX_LOCAL_SERVER, __uuidof(IServiceProvider), (PVOID*)&service_provider
+		CLSID_ImmersiveShell,
+		NULL,
+		CLSCTX_LOCAL_SERVER,
+		__uuidof(IServiceProvider),
+		(PVOID*)&service_provider
 	);
 
 	if (FAILED(hr)) {
@@ -162,7 +167,10 @@ IVirtualDesktopManager* desktop_manager() {
 }
 
 optional<GUID> get_window_desktop_id(HWND handle) {
-	if (GUID desktop_id; desktop_manager()->GetWindowDesktopId(handle, &desktop_id) != S_OK || equal_to<GUID>{}(desktop_id, GUID{})) {
+	if (
+		GUID desktop_id;
+		desktop_manager()->GetWindowDesktopId(handle, &desktop_id) != S_OK || equal_to<GUID>{}(desktop_id, GUID{})
+	) {
 		return {};
 	} else {
 		return desktop_id;
