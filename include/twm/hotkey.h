@@ -34,6 +34,8 @@ public:
 	void add(std::string_view keycombo, std::string_view action);
 	std::string_view action_of(int id) const;
 	void clear();
+
+	const std::vector<Hotkey>& hotkeys() const { return m_hotkeys; }
 };
 
 } // namespace twm

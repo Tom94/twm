@@ -9,6 +9,7 @@
 #include <twm/platform.h>
 
 #include <chrono>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <thread>
@@ -20,22 +21,16 @@ using namespace std;
 
 namespace twm {
 
-using clock = chrono::steady_clock;
+Config cfg = {};
 
 class Window {
 	string m_name = "";
 	Rect m_rect = {};
 	HWND m_handle = nullptr;
 	clock::time_point m_last_interacted_time = {};
-	GUID m_desktop_id = {};
-
 	bool m_marked_for_deletion = false;
 
-	Window(HWND handle, const GUID& desktop_id) :
-		m_name{get_window_text(handle)},
-		m_rect{get_window_frame_bounds(handle)},
-		m_handle{handle},
-		m_desktop_id{desktop_id} {}
+	Window(HWND handle) : m_name{get_window_text(handle)}, m_rect{get_window_frame_bounds(handle)}, m_handle{handle} {}
 
 	// Returns true if the name changed. Also apply global style
 	// settings to the window.
@@ -87,7 +82,11 @@ public:
 	void set_rounded_corners(RoundedCornerPreference rounded) { set_window_rounded_corners(m_handle, rounded); }
 
 	void update_border_color(bool is_focused) {
-		set_border_color(is_focused ? BorderColor::LightGray : BorderColor::DarkGray);
+		if (cfg.draw_focus_border) {
+			set_border_color(is_focused ? BorderColor::LightGray : BorderColor::DarkGray);
+		} else {
+			set_border_color(BorderColor::Default);
+		}
 	}
 
 	auto last_focus_time() const { return m_last_interacted_time; }
@@ -128,7 +127,7 @@ class Desktop {
 	}
 
 	bool try_manage(HWND handle, bool is_focused) {
-		auto w = Window{handle, m_id};
+		auto w = Window{handle};
 
 		if (!can_be_managed(w)) {
 			return false;
@@ -425,6 +424,7 @@ enum class Action {
 	MoveToDesktop,
 	Close,
 	Terminate,
+	Reload,
 };
 
 Action to_action(string_view str) {
@@ -439,6 +439,8 @@ Action to_action(string_view str) {
 		return Action::Close;
 	} else if (lstr == "terminate") {
 		return Action::Terminate;
+	} else if (lstr == "reload") {
+		return Action::Reload;
 	}
 
 	throw runtime_error{format("Invalid action: {}", str)};
@@ -460,17 +462,72 @@ Target to_target(string_view str) {
 	throw runtime_error{format("Invalid target: {}", str)};
 }
 
+void save_config_to_appdata() {
+	if (char* appdata = getenv("APPDATA")) {
+		if (filesystem::exists(appdata)) {
+			log_info("Saving config to {}\\twm\\twm.toml", appdata);
+
+			auto config_dir = filesystem::path{appdata} / "twm";
+			try {
+				filesystem::create_directories(config_dir);
+				auto config_path = filesystem::path{appdata} / "twm" / "twm.toml";
+				ofstream f{config_path};
+				cfg.save(f);
+			} catch (const filesystem::filesystem_error& e) {
+				log_error(format("Failed to save config: {}", e.what()));
+			}
+		}
+	}
+}
+
+void reload() {
+	// Try the following configs in order of priority:
+	// 1. twm.toml in the current working directory
+	// 2. TWM_CONFIG_PATH environment variable
+	// 3. %APPDATA%\twm\twm.toml
+	// 4. default config (and try to save it to %APPDATA%\twm\twm.toml)
+
+	filesystem::path config_path = "twm.toml";
+	if (!filesystem::exists(config_path)) {
+		if (char* env_config_path = getenv("TWM_CONFIG_PATH")) {
+			config_path = env_config_path;
+		}
+	}
+
+	if (!filesystem::exists(config_path)) {
+		if (char* appdata = getenv("APPDATA")) {
+			config_path = filesystem::path{appdata} / "twm" / "twm.toml";
+		}
+	}
+
+	if (!filesystem::exists(config_path)) {
+		log_info("No config file found. Using default config.");
+		cfg.load_default();
+		// save_config_to_appdata();
+		return;
+	}
+
+	log_info("Loading config from {}", config_path.string());
+	cfg.load_from_file(config_path);
+
+	if (cfg.disable_drop_shadows) {
+		set_system_dropshadow(false);
+	}
+}
+
 void invoke_action(string_view action) {
+	log_debug(format("Invoking action: {}", action));
+
 	auto parts = split(action, " ");
 	if (parts.size() < 1) {
-		throw runtime_error{"Invalid action"};
+		throw runtime_error{"Invalid action. Must be of the form <focus|swap|move_to_desktop|close|terminate|reload>"};
 	}
 
 	auto action_type = to_action(parts[0]);
 	switch (action_type) {
 		case Action::Focus: {
 			if (parts.size() != 3) {
-				throw runtime_error{"Invalid focus action"};
+				throw runtime_error{"Invalid focus. Syntax: focus <window|desktop> <top|bottom|left|right>"};
 			}
 
 			auto target = to_target(parts[1]);
@@ -482,7 +539,7 @@ void invoke_action(string_view action) {
 		} break;
 		case Action::Swap: {
 			if (parts.size() != 3) {
-				throw runtime_error{"Invalid swap action"};
+				throw runtime_error{"Invalid swap. Syntax: swap <window|desktop> <top|bottom|left|right>"};
 			}
 
 			auto target = to_target(parts[1]);
@@ -494,7 +551,7 @@ void invoke_action(string_view action) {
 		} break;
 		case Action::MoveToDesktop: {
 			if (parts.size() != 3) {
-				throw runtime_error{"Invalid move action"};
+				throw runtime_error{"Invalid move_to_desktop. Syntax: move_to_desktop <window|desktop> <left|right>"};
 			}
 
 			auto target = to_target(parts[1]);
@@ -506,7 +563,7 @@ void invoke_action(string_view action) {
 		} break;
 		case Action::Close: {
 			if (parts.size() != 2) {
-				throw runtime_error{"Invalid close action"};
+				throw runtime_error{"Invalid close. Syntax: close window"};
 			}
 
 			auto target = to_target(parts[1]);
@@ -521,7 +578,7 @@ void invoke_action(string_view action) {
 		} break;
 		case Action::Terminate: {
 			if (parts.size() != 2) {
-				throw runtime_error{"Invalid terminate action"};
+				throw runtime_error{"Invalid terminate. Syntax: terminate window"};
 			}
 
 			auto target = to_target(parts[1]);
@@ -534,10 +591,12 @@ void invoke_action(string_view action) {
 				case Target::Desktop: throw runtime_error{"Cannot terminate desktops"}; break;
 			}
 		} break;
+		case Action::Reload: reload(); break;
+		default: throw runtime_error{format("Invalid action: {}", action)};
 	}
 }
 
-void tick(const Config& cfg) {
+void tick() {
 	{
 		static auto last_update = clock::now();
 
@@ -558,7 +617,7 @@ void tick(const Config& cfg) {
 				invoke_action(cfg.hotkeys.action_of((int)msg.wParam));
 			} break;
 			default: {
-				log_warning(format("Unknown message: {}", msg.message));
+				log_debug(format("PeekMessage: unknown message ID {}", msg.message));
 			} break;
 		}
 	}
@@ -576,39 +635,11 @@ int main() {
 	// mistakenly get treated as having errored out.
 	SetLastError(0);
 
-	// Disable drop shadow for windows. This is a personal preference.
-	set_system_dropshadow(false);
-
 	try {
-		Config cfg = {};
-
-		cfg.load_from_string(R"(
-[hotkeys]
-alt-h = "focus window left"
-alt-j = "focus window down"
-alt-k = "focus window up"
-alt-l = "focus window right"
-
-alt-shift-h = "swap window left"
-alt-shift-j = "swap window down"
-alt-shift-k = "swap window up"
-alt-shift-l = "swap window right"
-
-alt-1 = "focus desktop left"
-alt-2 = "focus desktop right"
-
-alt-left = "focus desktop left"
-alt-right = "focus desktop right"
-
-alt-shift-1 = "move_to_desktop window left"
-alt-shift-2 = "move_to_desktop window right"
-
-alt-shift-q = "close window"
-ctrl-alt-shift-q = "terminate window"
-		)");
+		reload();
 
 		while (true) {
-			tick(cfg);
+			tick();
 			this_thread::sleep_for(cfg.tick_interval());
 		}
 	} catch (const runtime_error& e) {

@@ -14,11 +14,15 @@ namespace twm {
 struct Config {
 	float tick_interval_seconds = 0.005f;
 	float update_interval_seconds = 0.1f;
-	bool must_focus = true;
+	bool disable_drop_shadows = false;
+	bool disable_rounded_corners = false;
+	bool draw_focus_border = false;
 	Hotkeys hotkeys;
 
+	void load_default();
 	void load_from_file(const std::filesystem::path& path);
 	void load_from_string(std::string_view path);
+	void save(std::ostream& out) const;
 
 	clock::duration tick_interval() const { return std::chrono::duration_cast<clock::duration>(std::chrono::duration<float>(tick_interval_seconds)); }
 	clock::duration update_interval() const { return std::chrono::duration_cast<clock::duration>(std::chrono::duration<float>(update_interval_seconds)); }
