@@ -15,21 +15,7 @@ namespace twm {
 int last_error_code() { return GetLastError(); }
 
 string error_string(int code) {
-	char* s = NULL;
-	FormatMessage(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL,
-		code,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPSTR)&s,
-		0,
-		NULL
-	);
-
-	string result = s;
-	LocalFree(s);
-
-	return trim(result);
+	return format("{} ({})", trim(std::system_category().message(code)), code);
 }
 
 string last_error_string() { return error_string(last_error_code()); }
