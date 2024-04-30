@@ -596,7 +596,7 @@ void invoke_action(string_view action) {
 	}
 }
 
-void tick() {
+bool tick() {
 	{
 		static auto last_update = clock::now();
 
@@ -616,11 +616,18 @@ void tick() {
 				Desktop::update_all();
 				invoke_action(cfg.hotkeys.action_of((int)msg.wParam));
 			} break;
+			case WM_CLOSE:
+			case WM_QUIT: {
+				log_debug("Received WM_QUIT / WM_CLOSE. Exiting...");
+				return false;
+			} break;
 			default: {
 				log_debug(format("PeekMessage: unknown message ID {}", msg.message));
 			} break;
 		}
 	}
+
+	return true;
 }
 
 int main() {
@@ -638,8 +645,7 @@ int main() {
 	try {
 		reload();
 
-		while (true) {
-			tick();
+		while (tick()) {
 			this_thread::sleep_for(cfg.tick_interval());
 		}
 	} catch (const runtime_error& e) {
@@ -652,4 +658,4 @@ int main() {
 
 } // namespace twm
 
-int main() { return twm::main(); }
+int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return twm::main(); }

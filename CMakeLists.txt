@@ -135,7 +135,7 @@ set(
 
 set(TWM_LIBS dwmapi)
 
-add_executable(twm ${TWM_SOURCES})
+add_executable(twm WIN32 ${TWM_SOURCES})
 target_link_libraries(twm PUBLIC ${TWM_LIBS})
 target_include_directories(twm PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
