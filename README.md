@@ -75,7 +75,7 @@ draw_focus_border = true
 ## Tiling window manager
 
 You might have guessed that **twm** stands for **t**iling **w**indow **m**anager... and that would be correct!
-I plan to add BSP-tree (binary space partitioning) tiling in the future.
+I would like to add BSP-tree (binary space partitioning) tiling in the future.
 Until then, I recommend using [FancyZones](https://learn.microsoft.com/en-us/windows/powertoys/fancyzones) (part of [PowerToys](https://learn.microsoft.com/en-us/windows/powertoys/)) to tile your windows.
 
 Alternatively, check out [komorebi](https://github.com/LGUG2Z/komorebi), an almost fully fledged tiling window manager for Windows.
