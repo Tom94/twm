@@ -7,7 +7,6 @@
 
 #include <cmath>
 #include <format>
-#include <string_view>
 
 namespace twm {
 
@@ -100,18 +99,3 @@ struct Rect {
 
 } // namespace twm
 
-// String formatting routines for Vec2 and Rect
-namespace std {
-template <> struct std::formatter<twm::Vec2> {
-	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
-	auto format(const twm::Vec2& v, std::format_context& ctx) {
-		return std::format_to(ctx.out(), "[{}, {}]", v.x, v.y);
-	}
-};
-template <> struct std::formatter<twm::Rect> {
-	constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
-	auto format(const twm::Rect& r, std::format_context& ctx) {
-		return std::format_to(ctx.out(), "[top_left={}, bottom_right={}]", r.top_left, r.bottom_right);
-	}
-};
-} // namespace std
