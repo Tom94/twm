@@ -8,6 +8,9 @@ indent_size = 4
 trim_trailing_whitespace = true
 max_line_length = 120
 
+[*.wxs]
+indent_style = space
+
 [*.md]
 trim_trailing_whitespace = false
 

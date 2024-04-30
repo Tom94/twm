@@ -1,14 +1,38 @@
 <CPackWiXPatch>
     <CPackWiXFragment Id="#PRODUCTFEATURE">
+        <Feature Id='Service' Title='Background Service' Description='Launch [ProductName] on system startup.' Level='1' Absent='allow'>
+            <ComponentRef Id='ServiceCmp' />
+        </Feature>
         <Feature Id='Environment' Title='PATH Environment Variable' Description='Add the install location of the [ProductName] executable to the PATH system environment variable. This allows the [ProductName] executable to be called from any location.' Level='1' Absent='allow'>
-            <ComponentRef Id='Path' />
+            <ComponentRef Id='PathCmp' />
         </Feature>
     </CPackWiXFragment>
     <CPackWiXFragment Id="#PRODUCT">
         <DirectoryRef Id="CM_DP_bin">
-            <Component Id='Path' Guid='28f0d0ad-50ce-4d31-a07a-0726063d3d80' KeyPath='yes'>
+            <Component Id='ServiceCmp' Guid='4861d044-9877-4019-8e8b-716cf72d0b67' >
+                <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run">
+                    <RegistryValue Type="string" Name="[ProductName]" Value="&quot;[CM_DP_bin]twm.exe&quot;" KeyPath="yes"/>
+                </RegistryKey>
+            </Component>
+            <Component Id='PathCmp' Guid='28f0d0ad-50ce-4d31-a07a-0726063d3d80' KeyPath='yes'>
                 <Environment Id='PATH' Name='PATH' Value='[CM_DP_bin]' Permanent='no' Part='last' Action='set' System='yes' />
             </Component>
         </DirectoryRef>
+
+        <!-- Launch twm after installation -->
+        <Property Id="LAUNCHAPP" Value="1"/>
+
+        <UI>
+            <Publish Dialog="ExitDialog"
+                Control="Finish"
+                Event="DoAction"
+                Value="LaunchApplication">LAUNCHAPP = "1"</Publish>
+        </UI>
+
+        <CustomAction Id="LaunchApplication"
+            FileKey="CM_FP_bin.twm.exe"
+            ExeCommand=""
+            Execute="immediate"
+            Return="asyncNoWait"/>
     </CPackWiXFragment>
 </CPackWiXPatch>
