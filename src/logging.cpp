@@ -1,6 +1,7 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the GPU GPLv3 license; see LICENSE.txt for details.
 
+#include <twm/common.h>
 #include <twm/logging.h>
 
 #include <tinylogger/tinylogger.h>
@@ -22,7 +23,12 @@ void log(Severity severity, const string& str) {
 		case Severity::Debug: tlog::debug() << str; break;
 		case Severity::Info: tlog::info() << str; break;
 		case Severity::Warning: tlog::warning() << str; break;
-		case Severity::Error: tlog::error() << str; break;
+		case Severity::Error: {
+			tlog::error() << str;
+			if (!GetConsoleWindow()) {
+				MessageBox(nullptr, str.c_str(), "Error", MB_OK | MB_ICONERROR);
+			}
+		} break;
 	}
 }
 
