@@ -630,13 +630,32 @@ bool tick() {
 	return true;
 }
 
-int main() {
+int main(const vector<string>& args) {
 	// Required for IVirtualDesktopManager
 	CoInitialize(nullptr);
 
-	// This app represents strings in UTF8 -- the following call makes sure
-	// that non-ASCII characters print correctly in the terminal.
-	SetConsoleOutputCP(CP_UTF8);
+	bool console = false;
+	for (const auto& arg : args) {
+		if (arg == "--console") {
+			console = true;
+		}
+	}
+
+	if (console) {
+		if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+			AllocConsole();
+		}
+
+		freopen("CONOUT$", "w", stdout);
+		freopen("CONOUT$", "w", stderr);
+		freopen("CONIN$", "r", stdin);
+
+		ios::sync_with_stdio(true);
+
+		// This app represents strings in UTF8 -- the following call makes sure
+		// that non-ASCII characters print correctly in the terminal.
+		SetConsoleOutputCP(CP_UTF8);
+	}
 
 	// Reset the error state of the windows API such that later API calls don't
 	// mistakenly get treated as having errored out.
@@ -658,4 +677,16 @@ int main() {
 
 } // namespace twm
 
-int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return twm::main(); }
+int CALLBACK wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int) {
+	int argc = 0;
+	auto* argv = CommandLineToArgvW(lpCmdLine, &argc);
+	vector<string> args;
+	if (argv != nullptr) {
+		for (int i = 0; i < argc; ++i) {
+			args.emplace_back(twm::utf16_to_utf8(argv[i]));
+		}
+	}
+
+	return twm::main(args);
+}
+
