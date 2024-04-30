@@ -87,12 +87,13 @@ Rect get_window_frame_bounds(HWND handle) {
 }
 
 void set_window_rounded_corners(HWND handle, RoundedCornerPreference rounded) {
-	auto preference = (DWM_WINDOW_CORNER_PREFERENCE)rounded;
-	DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+	static const uint32_t WINDOW_CORNER_PREFERENCE = 33;
+	DwmSetWindowAttribute(handle, WINDOW_CORNER_PREFERENCE, &rounded, sizeof(rounded));
 }
 
 void set_window_border_color(HWND handle, BorderColor color) {
-	DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, &color, sizeof(color));
+	static const uint32_t BORDER_COLOR = 34;
+	DwmSetWindowAttribute(handle, BORDER_COLOR, &color, sizeof(color));
 }
 
 void set_system_dropshadow(bool enabled) {
