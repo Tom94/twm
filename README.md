@@ -1,4 +1,4 @@
-# twm — Directional focus switcher for Windows
+# twm — Directional focus switcher for Windows &nbsp; ![](https://github.com/tom94/twm/workflows/CI/badge.svg)
 
 You've perfectly arranged your windows.
 Code in the middle, terminal to your left, browser to your right.
