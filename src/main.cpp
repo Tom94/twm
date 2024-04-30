@@ -7,6 +7,7 @@
 #include <twm/logging.h>
 #include <twm/math.h>
 #include <twm/platform.h>
+#include <twm/tray.h>
 
 #include <chrono>
 #include <fstream>
@@ -609,6 +610,12 @@ bool tick() {
 
 	MSG msg = {};
 	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE) != 0) {
+		if (msg.hwnd != nullptr) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+			continue;
+		}
+
 		switch (msg.message) {
 			case WM_HOTKEY: {
 				// Ensure our information about desktops and their contained windows is as up-to-date as
@@ -616,9 +623,10 @@ bool tick() {
 				Desktop::update_all();
 				invoke_action(cfg.hotkeys.action_of((int)msg.wParam));
 			} break;
+			case WM_DESTROY:
 			case WM_CLOSE:
 			case WM_QUIT: {
-				log_debug("Received WM_QUIT / WM_CLOSE. Exiting...");
+				log_debug("Received WM_QUIT/CLOSE/DESTROY. Exiting...");
 				return false;
 			} break;
 			default: {
@@ -630,7 +638,7 @@ bool tick() {
 	return true;
 }
 
-int main(const vector<string>& args) {
+int main(HINSTANCE instance, const vector<string>& args) {
 	// Required for IVirtualDesktopManager
 	CoInitialize(nullptr);
 
@@ -657,6 +665,13 @@ int main(const vector<string>& args) {
 		SetConsoleOutputCP(CP_UTF8);
 	}
 
+	std::unique_ptr<TrayPresence> tray_presence;
+	try {
+		tray_presence = make_unique<TrayPresence>(instance);
+	} catch (const runtime_error& e) {
+		log_warning(format("Tray presence failed: {}", e.what()));
+	}
+
 	// Reset the error state of the windows API such that later API calls don't
 	// mistakenly get treated as having errored out.
 	SetLastError(0);
@@ -677,7 +692,7 @@ int main(const vector<string>& args) {
 
 } // namespace twm
 
-int CALLBACK wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int) {
+int CALLBACK wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR lpCmdLine, int) {
 	int argc = 0;
 	auto* argv = CommandLineToArgvW(lpCmdLine, &argc);
 	vector<string> args;
@@ -687,6 +702,5 @@ int CALLBACK wWinMain(HINSTANCE, HINSTANCE, LPWSTR lpCmdLine, int) {
 		}
 	}
 
-	return twm::main(args);
+	return twm::main(instance, args);
 }
-

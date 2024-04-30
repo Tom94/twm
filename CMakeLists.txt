@@ -128,6 +128,7 @@ set(
 	src/logging.cpp include/twm/logging.h
 	src/math.cpp include/twm/math.h
 	src/platform.cpp include/twm/platform.h
+	src/tray.cpp include/twm/tray.h
 )
 
 # set(TWM_SOURCES ${TWM_SOURCES} resources/icon.rc)
