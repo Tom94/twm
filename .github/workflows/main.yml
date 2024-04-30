@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build_windows:
+    name: Build on Windows
+    runs-on: windows-2022
+    env:
+      build_dir: "build"
+      config: "Release"
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+      - name: CMake
+        run: cmake . -B ${{ env.build_dir }} -DTWM_DEPLOY=1
+      - name: Build
+        working-directory: ${{ env.build_dir }}
+        run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
+      - name: Create installer
+        working-directory: ${{ env.build_dir }}
+        run: cpack
+      - name: Upload executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: Windows executable
+          path: ${{ env.build_dir }}/${{ env.config }}/twm.exe
+      - name: Upload installer
+        uses: actions/upload-artifact@v3
+        with:
+          name: Windows installer
+          path: ${{ env.build_dir }}/twm-installer.msi
