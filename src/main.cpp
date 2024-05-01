@@ -79,14 +79,14 @@ public:
 		return true;
 	}
 
-	void set_border_color(BorderColor color) { set_window_border_color(m_handle, color); }
+	void set_border_color(uint32_t color) { set_window_border_color(m_handle, color); }
 	void set_rounded_corners(RoundedCornerPreference rounded) { set_window_rounded_corners(m_handle, rounded); }
 
 	void update_border_color(bool is_focused) {
 		if (cfg.draw_focus_border) {
-			set_border_color(is_focused ? BorderColor::LightGray : BorderColor::DarkGray);
+			set_border_color(is_focused ? to_colorref(cfg.focused_border_color) : to_colorref(cfg.unfocused_border_color));
 		} else {
-			set_border_color(BorderColor::Default);
+			set_border_color((COLORREF)BorderColor::Default);
 		}
 	}
 

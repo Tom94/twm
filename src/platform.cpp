@@ -77,7 +77,9 @@ void set_window_rounded_corners(HWND handle, RoundedCornerPreference rounded) {
 	DwmSetWindowAttribute(handle, WINDOW_CORNER_PREFERENCE, &rounded, sizeof(rounded));
 }
 
-void set_window_border_color(HWND handle, BorderColor color) {
+COLORREF to_colorref(uint32_t color) { return RGB((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF); }
+
+void set_window_border_color(HWND handle, COLORREF color) {
 	static const uint32_t BORDER_COLOR = 34;
 	DwmSetWindowAttribute(handle, BORDER_COLOR, &color, sizeof(color));
 }

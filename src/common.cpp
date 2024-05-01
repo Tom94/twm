@@ -37,17 +37,27 @@ string to_lower(string_view str) {
 	return result;
 }
 
-string ltrim(string s) {
-	s.erase(s.begin(), find_if(s.begin(), s.end(), [](char c) { return !isspace(c); }));
+string_view ltrim(string_view s, const string_view& chars) {
+	auto pos = s.find_first_not_of(chars);
+	if (pos == string_view::npos) {
+		return {};
+	}
+
+	s.remove_prefix(pos);
 	return s;
 }
 
-string rtrim(string s) {
-	s.erase(find_if(s.rbegin(), s.rend(), [](char c) { return !isspace(c); }).base(), s.end());
+string_view rtrim(string_view s, const string_view& chars) {
+	auto pos = s.find_last_not_of(chars);
+	if (pos == string_view::npos) {
+		return {};
+	}
+
+	s.remove_suffix(s.size() - pos - 1);
 	return s;
 }
 
-string trim(string s) { return ltrim(rtrim(s)); }
+string_view trim(string_view s, const string_view& chars) { return ltrim(rtrim(s, chars), chars); }
 
 vector<string> split(string_view text, const string& delim) {
 	vector<string> result;

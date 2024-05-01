@@ -70,6 +70,10 @@ Simply enable any of the following config values:
 disable_drop_shadows = true
 disable_rounded_corners = true
 draw_focus_border = true
+
+# RRGGBB border colors
+focused_border_color = "#999999" # light gray
+unfocused_border_color = "#333333" # dark gray
 ```
 
 ## Tiling window manager

@@ -74,9 +74,9 @@ private:
 std::string utf16_to_utf8(const std::wstring& utf16);
 std::wstring utf8_to_utf16(const std::string& utf8);
 std::string to_lower(std::string_view str);
-std::string ltrim(std::string s);
-std::string rtrim(std::string s);
-std::string trim(std::string s);
+std::string_view ltrim(std::string_view s, const std::string_view& chars = " \t\n\r\f\v");
+std::string_view rtrim(std::string_view s, const std::string_view& chars = " \t\n\r\f\v");
+std::string_view trim(std::string_view s, const std::string_view& chars = " \t\n\r\f\v");
 
 std::vector<std::string> split(std::string_view text, const std::string& delim);
 

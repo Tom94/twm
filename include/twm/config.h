@@ -17,6 +17,8 @@ struct Config {
 	bool disable_drop_shadows = false;
 	bool disable_rounded_corners = false;
 	bool draw_focus_border = false;
+	uint32_t focused_border_color = 0x999999;
+	uint32_t unfocused_border_color = 0x333333;
 	Hotkeys hotkeys;
 
 	void load_default();

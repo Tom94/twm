@@ -36,7 +36,9 @@ enum class RoundedCornerPreference {
 
 void set_window_rounded_corners(HWND handle, RoundedCornerPreference rounded);
 
-enum class BorderColor : uint32_t {
+COLORREF to_colorref(uint32_t color);
+
+enum class BorderColor : COLORREF {
 	Black = 0x00000000,
 	DarkGray = 0x00333333,
 	Gray = 0x00666666,
@@ -50,7 +52,7 @@ enum class BorderColor : uint32_t {
 	Default = 0xFFFFFFFF,
 };
 
-void set_window_border_color(HWND handle, BorderColor color);
+void set_window_border_color(HWND handle, COLORREF color);
 void set_system_dropshadow(bool enabled);
 
 bool focus_window(HWND handle); // returns false if the window could not be focused
