@@ -65,4 +65,7 @@ std::optional<GUID> get_window_desktop_id(HWND handle);
 bool is_window_on_current_desktop(HWND handle);
 bool move_window_to_desktop(HWND handle, const GUID& desktop_id);
 
+bool is_autostart_enabled();
+bool set_autostart_enabled(bool value);
+
 } // namespace twm

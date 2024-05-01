@@ -181,4 +181,60 @@ bool move_window_to_desktop(HWND handle, const GUID& desktop_id) {
 	}
 }
 
+bool is_autostart_enabled() {
+	HKEY key;
+	if (HRESULT res = RegOpenKeyEx(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_READ, &key) != ERROR_SUCCESS) {
+		log_warning("Could not open registry key for reading: {}", error_string(res));
+		return false;
+	}
+
+	auto guard = ScopeGuard([&]() { RegCloseKey(key); });
+
+	wchar_t registry_path[MAX_PATH];
+	DWORD n_bytes = sizeof(registry_path);
+	if (RegQueryValueExW(key, L"twm", 0, nullptr, (LPBYTE)registry_path, &n_bytes) != ERROR_SUCCESS) {
+		return false;
+	}
+
+	wchar_t executable_path[MAX_PATH];
+	DWORD len = GetModuleFileNameW(nullptr, executable_path, MAX_PATH);
+	if (len == 0 || len == MAX_PATH) {
+		log_warning("Could not get module file name");
+		return false;
+	}
+
+	return !wcscmp(registry_path, executable_path);
+}
+
+bool set_autostart_enabled(bool value) {
+	HKEY key;
+	if (HRESULT res = RegOpenKeyEx(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_WRITE, &key) != ERROR_SUCCESS) {
+		log_warning("Could not open registry key for writing: {}", error_string(res));
+		return false;
+	}
+
+	auto guard = ScopeGuard([&]() { RegCloseKey(key); });
+
+	if (value) {
+		wchar_t path[MAX_PATH];
+		DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
+		if (len == 0 || len == MAX_PATH) {
+			log_warning("Could not get module file name");
+			return false;
+		}
+
+		if (HRESULT res = RegSetValueExW(key, L"twm", 0, REG_SZ, (const BYTE*)path, sizeof(wchar_t) * (len + 1)) != ERROR_SUCCESS) {
+			log_warning("Could not set registry value: {}", error_string(res));
+			return false;
+		}
+	} else {
+		if (HRESULT res = RegDeleteValueW(key, L"twm") != ERROR_SUCCESS) {
+			log_warning("Could not delete registry value: {}", error_string(res));
+			return false;
+		}
+	}
+
+	return true;
+}
+
 } // namespace twm

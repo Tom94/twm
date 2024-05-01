@@ -81,14 +81,28 @@ TrayPresence::~TrayPresence() {
 }
 
 LRESULT CALLBACK TrayPresence::tray_window_proc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	static const uint32_t IDM_EXIT = 1;
+	enum TrayMessage : uint32_t {
+		IDM_EXIT,
+		IDM_AUTOSTART_ENABLE,
+		IDM_AUTOSTART_DISABLE,
+	};
 
 	switch (message) {
 		case WM_TRAYICON_MSG: {
 			if (lParam == WM_RBUTTONUP) {
 				// User has right-clicked the tray icon, display the context menu
+				bool autostart = is_autostart_enabled();
+
 				HMENU menu = CreatePopupMenu();
-				InsertMenu(menu, 0, MF_BYPOSITION | MF_STRING, IDM_EXIT, "Exit");
+				InsertMenu(
+					menu,
+					(UINT)-1,
+					MF_BYPOSITION | MF_STRING | (autostart ? MF_CHECKED : 0),
+					autostart ? IDM_AUTOSTART_DISABLE : IDM_AUTOSTART_ENABLE,
+					"Start with Windows"
+				);
+				InsertMenu(menu, (UINT)-1, MF_BYPOSITION | MF_STRING, IDM_EXIT, "Exit");
+
 				POINT pt;
 				GetCursorPos(&pt);
 				SetForegroundWindow(hWnd);
@@ -97,10 +111,24 @@ LRESULT CALLBACK TrayPresence::tray_window_proc(HWND hWnd, UINT message, WPARAM 
 				DestroyMenu(menu);
 			}
 		} break;
+		case WM_DESTROY:
+		case WM_CLOSE:
+		case WM_QUIT: {
+			log_debug("Tray received WM_DESTROY/CLOSE/QUIT. Exiting...");
+			PostQuitMessage(0);
+		} break;
 		case WM_COMMAND: {
 			switch (LOWORD(wParam)) {
+				case IDM_AUTOSTART_ENABLE: {
+					log_debug("Enabling autostart");
+					set_autostart_enabled(true);
+				} break;
+				case IDM_AUTOSTART_DISABLE: {
+					log_debug("Disabling autostart");
+					set_autostart_enabled(false);
+				} break;
 				case IDM_EXIT: {
-					log_debug("Received IDM_EXIT. Exiting...");
+					log_debug("Tray received IDM_EXIT. Exiting...");
 					PostQuitMessage(0);
 				} break;
 			}

@@ -11,7 +11,7 @@
         <DirectoryRef Id="CM_DP_bin">
             <Component Id='ServiceCmp' Guid='4861d044-9877-4019-8e8b-716cf72d0b67' >
                 <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run">
-                    <RegistryValue Type="string" Name="[ProductName]" Value="&quot;[CM_DP_bin]twm.exe&quot;" KeyPath="yes"/>
+                    <RegistryValue Type="string" Name="[ProductName]" Value="[CM_DP_bin]twm.exe" KeyPath="yes"/>
                 </RegistryKey>
             </Component>
             <Component Id='PathCmp' Guid='28f0d0ad-50ce-4d31-a07a-0726063d3d80' KeyPath='yes'>
