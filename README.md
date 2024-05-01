@@ -21,10 +21,10 @@ You can also swap adjacent windows with `alt-shift-<dir key>`.
 
 ## Configuration
 
-**twm** is configured by a [TOML file](https://toml.io/en/) `%APPDATA%\twm\twm.toml`.
-If you want **twm** to load another file, set the `TWM_CONFIG_PATH` environment variable to its path.
+**twm** can be configured by a [TOML file](https://toml.io/en/) that must be placed at `%APPDATA%\twm\twm.toml`.
+You can also use another path by setting the `TWM_CONFIG_PATH` environment variable.
 
-If no config file exists, **twm** uses the (self-explanatory) default configuration:
+If the config file does not exist, **twm** uses the (self-explanatory) default config:
 
 ```toml
 disable_drop_shadows = false
@@ -63,7 +63,7 @@ alt-shift-r = "reload"
 
 ## Styling
 
-**twm** can add styling that makes tiled windows more ergonomic to navigate.
+**twm** can add styling to make navigation easier.
 Simply enable any of the following config values:
 
 ```toml
@@ -78,7 +78,7 @@ unfocused_border_color = "#333333" # dark gray
 
 ## Tiling window manager
 
-You might have guessed that **twm** stands for **t**iling **w**indow **m**anager... and that would be correct!
+Maybe you guessed that **twm** stands for **t**iling **w**indow **m**anager... and that would be correct!
 I would like to add BSP-tree (binary space partitioning) tiling in the future.
 Until then, I recommend using [FancyZones](https://learn.microsoft.com/en-us/windows/powertoys/fancyzones) (part of [PowerToys](https://learn.microsoft.com/en-us/windows/powertoys/)) to tile your windows.
 
