@@ -121,6 +121,7 @@ endif()
 
 set(
 	TWM_SOURCES
+
 	src/main.cpp
 	src/common.cpp include/twm/common.h
 	src/config.cpp include/twm/config.h
@@ -129,10 +130,10 @@ set(
 	src/math.cpp include/twm/math.h
 	src/platform.cpp include/twm/platform.h
 	src/tray.cpp include/twm/tray.h
-)
 
-# set(TWM_SOURCES ${TWM_SOURCES} resources/icon.rc)
-# set(TWM_SOURCES ${TWM_SOURCES} resources/twm.manifest)
+	resources/icon.rc include/twm/icon.h
+	resources/twm.manifest
+)
 
 set(TWM_LIBS dwmapi)
 
@@ -159,15 +160,14 @@ install(TARGETS twm RUNTIME DESTINATION "bin")
 set(CPACK_GENERATOR "WIX")
 set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-installer")
 
-# set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png")
+set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
 set(CPACK_PACKAGE_EXECUTABLES "twm" "twm")
 
 set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/patch.wxs")
 set(CPACK_WIX_UPGRADE_GUID "6f1c3920-4938-4f28-b699-f8c714291362")
 set(CPACK_WIX_EXTENSIONS "WixUtilExtension")
 set(CPACK_WIX_CUSTOM_XMLNS "util=http://schemas.microsoft.com/wix/UtilExtension")
-# set(CPACK_WIX_PRODUCT_GUID "58cdfc1e-5f87-437c-9a56-a297c9c004b6")
-# set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
+set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
 
 configure_file(scripts/configure-winget.cmake scripts/configure-winget.cmake @ONLY)
 configure_file(resources/winget.yaml resources/winget.yaml COPYONLY)

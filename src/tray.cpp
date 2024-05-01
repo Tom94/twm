@@ -2,6 +2,7 @@
 // It is published under the GPU GPLv3 license; see LICENSE.txt for details.
 
 #include <twm/common.h>
+#include <twm/icon.h>
 #include <twm/logging.h>
 #include <twm/platform.h>
 #include <twm/tray.h>
@@ -52,7 +53,11 @@ TrayPresence::TrayPresence(HINSTANCE instance) {
 	nid.uID = m_uid; // Unique identifier of the tray icon
 	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 	nid.uCallbackMessage = WM_TRAYICON_MSG;
-	nid.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+	nid.hIcon = (HICON)LoadImage(instance, MAKEINTRESOURCE(IDI_TWM_ICON), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR);
+	if (nid.hIcon == nullptr) {
+		throw runtime_error{format("Failed to load icon: {}", last_error_string())};
+	}
+
 	strcpy_s(nid.szTip, "twm");
 
 	if (!Shell_NotifyIcon(NIM_ADD, &nid)) {
