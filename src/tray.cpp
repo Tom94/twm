@@ -120,11 +120,9 @@ LRESULT CALLBACK TrayPresence::tray_window_proc(HWND hWnd, UINT message, WPARAM 
 		case WM_COMMAND: {
 			switch (LOWORD(wParam)) {
 				case IDM_AUTOSTART_ENABLE: {
-					log_debug("Enabling autostart");
 					set_autostart_enabled(true);
 				} break;
 				case IDM_AUTOSTART_DISABLE: {
-					log_debug("Disabling autostart");
 					set_autostart_enabled(false);
 				} break;
 				case IDM_EXIT: {

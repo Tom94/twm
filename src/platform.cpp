@@ -216,6 +216,8 @@ bool set_autostart_enabled(bool value) {
 	auto guard = ScopeGuard([&]() { RegCloseKey(key); });
 
 	if (value) {
+		log_debug("Enabling autostart");
+
 		wchar_t path[MAX_PATH];
 		DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
 		if (len == 0 || len == MAX_PATH) {
@@ -228,6 +230,8 @@ bool set_autostart_enabled(bool value) {
 			return false;
 		}
 	} else {
+		log_debug("Disabling autostart");
+
 		if (HRESULT res = RegDeleteValueW(key, L"twm") != ERROR_SUCCESS) {
 			log_warning("Could not delete registry value: {}", error_string(res));
 			return false;

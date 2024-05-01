@@ -1,7 +1,7 @@
 # twm — Directional focus switcher for Windows &nbsp;![](https://github.com/tom94/twm/workflows/CI/badge.svg)
 
 <img align="right" src="resources/icon-256.png"/> You've perfectly arranged your windows.
-Code in the middle, terminal to your left, browser to your right.
+Code in the middle, terminal to the left, browser to the right.
 You're **flying** through your task, deep in the zone.
 But then it happens: you press `alt-tab` and it focuses the wrong window.
 No matter, `alt-shift-tab`, `alt-tab-tab`.
