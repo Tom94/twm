@@ -19,6 +19,11 @@ Vim shortcuts?
 
 You can also swap adjacent windows with `alt-shift-<dir key>`.
 
+## Installation
+
+Download the **twm** installer (.msi) or portable executable (.exe) from the [releases page](https://github.com/Tom94/twm/releases).
+The installer makes **twm** autostart with Windows (can be disabled in in the system tray later) and adds it to `PATH`.
+
 ## Configuration
 
 **twm** can be configured by a [TOML file](https://toml.io/en/) that must be placed at `%APPDATA%\twm\twm.toml`.
@@ -84,6 +89,28 @@ Until then, I recommend using [FancyZones](https://learn.microsoft.com/en-us/win
 
 Alternatively, check out [komorebi](https://github.com/LGUG2Z/komorebi), an almost fully fledged tiling window manager for Windows.
 (I say "almost" because [there is no tree-based tiling](https://github.com/LGUG2Z/komorebi/issues/59) like you might be used to from [i3](https://i3wm.org/) or [yabai](https://github.com/koekeishiya/yabai).)
+
+## Building twm
+
+All that is required for building **twm** is [CMake](https://cmake.org/) and Visual Studio 2022 or newer.
+Once both are installed, clone this repository and all its submodules using the following command:
+
+```sh
+> git clone --recursive https://github.com/Tom94/twm
+```
+
+Then, use [CMake](https://cmake.org/) as follows:
+
+```sh
+> cmake . -B build
+> cmake --build build --config Release -j
+```
+
+Afterwards, you can either run `twm.exe` or you can create an installer with
+
+```sh
+> cpack --config build/CPackConfig.cmake
+```
 
 ## License
 
